@@ -167,7 +167,7 @@ export default function AdminDashboardScreen() {
       >
         {/* Stats Summary */}
         <View className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
-          <Text className="text-sm font-semibold text-gray-900 mb-3">Aujourd'hui</Text>
+          <Text className="text-sm font-semibold text-gray-900 mb-3">Aujourd&apos;hui</Text>
           <View className="flex-row items-center justify-between">
             <View>
               <Text className="text-xs text-gray-500">Commandes</Text>
