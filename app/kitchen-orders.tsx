@@ -17,7 +17,9 @@ export default function KitchenOrdersScreen() {
   const [loading, setLoading] = useState(true);
 
   // Filter only active orders (not served yet)
-  const activeOrders = orders.filter(o => !o.isServed && o.status !== 'CANCELLED');
+  const activeOrders = Array.isArray(orders) 
+    ? orders.filter(o => o && !o.isServed && o.status !== 'CANCELLED')
+    : [];
 
   const loadOrders = useCallback(async () => {
     try {
@@ -130,11 +132,16 @@ export default function KitchenOrdersScreen() {
 
   const getTimeSince = (date: Date | string | undefined): string => {
     if (!date) return "À l'instant";
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    const minutes = Math.floor((Date.now() - dateObj.getTime()) / 60000);
-    if (minutes < 1) return "À l'instant";
-    if (minutes === 1) return '1 min';
-    return `${minutes} min`;
+    try {
+      const dateObj = typeof date === 'string' ? new Date(date) : date;
+      if (isNaN(dateObj.getTime())) return "À l'instant";
+      const minutes = Math.floor((Date.now() - dateObj.getTime()) / 60000);
+      if (minutes < 1) return "À l'instant";
+      if (minutes === 1) return '1 min';
+      return `${minutes} min`;
+    } catch {
+      return "À l'instant";
+    }
   };
 
   const getStatusColor = (status: OrderStatus): string => {

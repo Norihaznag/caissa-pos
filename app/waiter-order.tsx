@@ -99,13 +99,16 @@ export default function WaiterOrderScreen() {
   }, [loadData]);
 
   // Filter products by selected category and search
-  const filteredProducts = products.filter(p => {
-    const matchesCategory = searchQuery.length > 0 || p.categoryId === selectedCategory;
-    const matchesSearch = searchQuery.length === 0 || 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const isActive = p.isActive;
-    return matchesCategory && matchesSearch && isActive;
-  });
+  const filteredProducts = Array.isArray(products) 
+    ? products.filter(p => {
+        if (!p) return false;
+        const matchesCategory = (searchQuery?.length || 0) > 0 || p.categoryId === selectedCategory;
+        const matchesSearch = (searchQuery?.length || 0) === 0 || 
+          (p.name || '').toLowerCase().includes((searchQuery || '').toLowerCase());
+        const isActive = p.isActive !== false;
+        return matchesCategory && matchesSearch && isActive;
+      })
+    : [];
 
   // Add product to cart
   const addToCart = (productId: string, productName: string, price: number) => {
@@ -176,10 +179,17 @@ export default function WaiterOrderScreen() {
   };
 
   // Calculate total
-  const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const total = Array.isArray(cart) 
+    ? cart.reduce((sum, item) => {
+        if (!item) return sum;
+        return sum + ((Number(item.price) || 0) * (Number(item.quantity) || 0));
+      }, 0)
+    : 0;
 
   // Get cart item count
-  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartItemCount = Array.isArray(cart) 
+    ? cart.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0)
+    : 0;
 
   // Send order to kitchen
   const sendToKitchen = async () => {

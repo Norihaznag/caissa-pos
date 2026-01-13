@@ -142,6 +142,10 @@ const generateId = () => {
   });
 };
 
+// Safe array helpers to prevent crashes
+const safeArray = <T>(arr: T[] | null | undefined): T[] => arr || [];
+const safeNumber = (num: number | null | undefined): number => num || 0;
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({

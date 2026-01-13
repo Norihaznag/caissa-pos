@@ -71,9 +71,11 @@ export default function AdminProductsScreen() {
   }, [loadData]);
 
   // Filter products by search
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProducts = Array.isArray(products) 
+    ? products.filter(p => 
+        p && p.name && (p.name.toLowerCase().includes((searchQuery || '').toLowerCase()))
+      )
+    : [];
 
   const openAddModal = () => {
     setEditingProduct(null);

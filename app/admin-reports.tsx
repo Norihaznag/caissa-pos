@@ -64,8 +64,8 @@ export default function AdminReportsScreen() {
   }, [loadOrders]);
 
   // Calculate stats
-  const paidOrders = orders.filter(o => o.status === 'PAID');
-  const totalRevenue = paidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+  const paidOrders = Array.isArray(orders) ? orders.filter(o => o && o.status === 'PAID') : [];
+  const totalRevenue = paidOrders.reduce((sum, o) => sum + (o?.totalAmount || 0), 0);
   const avgOrderValue = paidOrders.length > 0 ? totalRevenue / paidOrders.length : 0;
 
   const getStatusBadge = (status: OrderSummary['status']) => {
@@ -96,7 +96,9 @@ export default function AdminReportsScreen() {
               <View className="flex-row items-center gap-2 mt-1">
                 <Clock size={12} color="#9CA3AF" />
                 <Text className="text-xs text-gray-500">
-                  {format(item.createdAt, 'HH:mm', { locale: fr })}
+                  {item.createdAt && !isNaN(item.createdAt.getTime()) 
+                    ? format(item.createdAt, 'HH:mm', { locale: fr })
+                    : '--:--'}
                 </Text>
                 <Text className="text-xs text-gray-400">•</Text>
                 <Text className="text-xs text-gray-500">

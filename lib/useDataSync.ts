@@ -94,6 +94,7 @@ export function useDataSync() {
               quantity: i.quantity,
             })),
             status: o.status,
+            isServed: o.is_served || false,
             totalAmount: o.total_amount,
             createdAt: new Date(o.created_at),
             updatedAt: new Date(o.updated_at),

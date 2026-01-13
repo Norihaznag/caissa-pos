@@ -23,14 +23,17 @@ export default function ReceiptScreen() {
   const [receiptData, setReceiptData] = useState<any>(null);
 
   useEffect(() => {
-    const order = orders.find(o => o.id === orderId);
-    if (order) {
-      const items: ReceiptItem[] = (order.items || []).map(item => ({
-        name: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.price,
-        total: item.price * item.quantity
-      }));
+    try {
+      if (!orders || !Array.isArray(orders)) return;
+      const order = orders.find(o => o && o.id === orderId);
+      if (order) {
+        const orderItems = Array.isArray(order.items) ? order.items : [];
+        const items: ReceiptItem[] = orderItems.map(item => ({
+          name: item?.productName || 'Produit',
+          quantity: Number(item?.quantity) || 1,
+          unitPrice: Number(item?.price) || 0,
+          total: (Number(item?.price) || 0) * (Number(item?.quantity) || 1)
+        }));
 
       setReceiptData({
         restaurantName: 'Café Marocain',
@@ -53,6 +56,9 @@ export default function ReceiptScreen() {
         change: 0,
         isPaid: order.status === 'PAID',
       });
+      }
+    } catch (error) {
+      console.error('Error loading receipt data:', error);
     }
   }, [orderId, orders]);
 
@@ -64,8 +70,20 @@ export default function ReceiptScreen() {
     );
   }
 
-  const dateObj = receiptData.date ? (typeof receiptData.date === 'string' ? new Date(receiptData.date) : receiptData.date) : new Date();
-  const currentDate = format(dateObj, "dd/MM/yyyy 'à' HH:mm", { locale: fr });
+  // Safe date parsing
+  let currentDate = '';
+  try {
+    const dateObj = receiptData.date 
+      ? (typeof receiptData.date === 'string' ? new Date(receiptData.date) : receiptData.date) 
+      : new Date();
+    if (!isNaN(dateObj.getTime())) {
+      currentDate = format(dateObj, "dd/MM/yyyy 'à' HH:mm", { locale: fr });
+    } else {
+      currentDate = format(new Date(), "dd/MM/yyyy 'à' HH:mm", { locale: fr });
+    }
+  } catch {
+    currentDate = new Date().toLocaleString('fr-FR');
+  }
 
   const generateReceiptText = () => {
     let text = '';

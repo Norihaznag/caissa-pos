@@ -106,16 +106,17 @@ export default function OrderHistoryScreen() {
     }
   };
 
-  const filteredOrders = orders.filter(order => {
+  const filteredOrders = Array.isArray(orders) ? orders.filter(order => {
+    if (!order) return false;
     const matchesSearch = 
-      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.waiterName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.tableNumber.toString().includes(searchQuery);
+      (order.id || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
+      (order.waiterName || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
+      String(order.tableNumber || '').includes(searchQuery || '');
     
     const matchesFilter = filterStatus === 'ALL' || order.status === filterStatus;
     
     return matchesSearch && matchesFilter;
-  });
+  }) : [];
 
   const renderOrder = ({ item }: { item: OrderHistoryItem }) => {
     const statusColors = getStatusColor(item.status);
@@ -146,7 +147,9 @@ export default function OrderHistoryScreen() {
           <View className="flex-row items-center gap-1">
             <Clock size={14} color="#6B7280" />
             <Text className="text-sm text-gray-500">
-              {format(item.createdAt, 'HH:mm', { locale: fr })}
+              {item.createdAt && !isNaN(item.createdAt.getTime()) 
+                ? format(item.createdAt, 'HH:mm', { locale: fr })
+                : '--:--'}
             </Text>
           </View>
           <Text className="text-sm text-gray-500">

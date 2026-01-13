@@ -104,9 +104,10 @@ export default function WaiterTablesScreen() {
 
   // Get active order for a table
   const getTableOrder = (tableNumber: number): Order | undefined => {
+    if (!orders || !Array.isArray(orders)) return undefined;
     return orders.find(o => 
-      o.tableNumber === tableNumber && 
-      !['PAID', 'CANCELLED'].includes(o.status)
+      o && o.tableNumber === tableNumber && 
+      o.status && !['PAID', 'CANCELLED'].includes(o.status)
     );
   };
 
@@ -150,9 +151,11 @@ export default function WaiterTablesScreen() {
     const activeOrder = getTableOrder(table.number);
     
     if (table.status === "occupied" && activeOrder) {
+      const itemsCount = Array.isArray(activeOrder.items) ? activeOrder.items.length : 0;
+      const orderTotal = activeOrder.totalAmount || 0;
       Alert.alert(
         `Table ${table.number}`,
-        `Commande: ${(activeOrder.items || []).length} articles\nTotal: ${activeOrder.totalAmount} MAD\nStatut: ${getStatusText(activeOrder.status)}`,
+        `Commande: ${itemsCount} articles\nTotal: ${orderTotal} MAD\nStatut: ${getStatusText(activeOrder.status || 'NEW')}`,
         [
           { text: "Fermer", style: "cancel" },
           {

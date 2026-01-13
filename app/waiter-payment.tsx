@@ -29,15 +29,28 @@ export default function PaymentScreen() {
 
   // Load order data
   useEffect(() => {
-    const order = orders.find(o => o.id === orderId);
-    if (order) {
-      setOrderItems(order.items || []);
-      setCurrentTableId(order.tableId || tableId || `table-${tableNumber}`);
+    try {
+      if (!orders || !Array.isArray(orders)) return;
+      const order = orders.find(o => o && o.id === orderId);
+      if (order) {
+        setOrderItems(Array.isArray(order.items) ? order.items : []);
+        setCurrentTableId(order.tableId || tableId || `table-${tableNumber}`);
+      }
+    } catch (error) {
+      console.error('Error loading order data:', error);
+      setOrderItems([]);
     }
   }, [orderId, orders, tableId, tableNumber]);
 
   // Calculate subtotal
-  const subtotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const subtotal = Array.isArray(orderItems) 
+    ? orderItems.reduce((sum, item) => {
+        if (!item) return sum;
+        const price = Number(item.price) || 0;
+        const quantity = Number(item.quantity) || 0;
+        return sum + (price * quantity);
+      }, 0)
+    : 0;
 
   // Calculate discount
   const discountValue = discountPercent 
