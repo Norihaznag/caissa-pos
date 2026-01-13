@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "CaissaPro",
+    "slug": "caissa-pro",
+    "version": "1.0.0",
+    "description": "Système de caisse moderne et intuitif pour restaurants et cafés. Gérez vos tables, commandes, paiements et rapports en toute simplicité.",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "caissapro",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "owner": "your-expo-username",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.caissapro.app",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "com.caissapro.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#3B82F6",
+        "foregroundImage": "./assets/images/adaptive-icon.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": []
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#3B82F6"
+        }
+      ],
+      "expo-haptics"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}
