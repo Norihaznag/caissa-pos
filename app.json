@@ -9,7 +9,6 @@
     "scheme": "caissapro",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "owner": "your-expo-username",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.caissapro.app",
@@ -47,9 +46,11 @@
       "reactCompiler": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "12acada6-df9d-4479-a8d4-19576cff8b93"
       }
-    }
+    },
+    "owner": "noureddineazinag"
   }
 }
