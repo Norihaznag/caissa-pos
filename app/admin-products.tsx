@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, TextInput } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Plus, Pencil, Trash2, Search, Package } from 'lucide-react-native';
 import { Modal, Input } from '@/components/ui';
+import { productService, categoryService } from '../lib/services';
 
 // Types
 interface Product {
@@ -19,43 +20,55 @@ interface Category {
   name: string;
 }
 
-// Mock data - TODO: Replace with Supabase
-const MOCK_CATEGORIES: Category[] = [
-  { id: '1', name: 'Boissons Chaudes' },
-  { id: '2', name: 'Boissons Froides' },
-  { id: '3', name: 'Jus' },
-  { id: '4', name: 'Pâtisserie' },
-  { id: '5', name: 'Sandwichs' },
-  { id: '6', name: 'Salades' },
-];
-
-const MOCK_PRODUCTS: Product[] = [
-  { id: '1', name: 'Café Noir', price: 5, categoryId: '1', categoryName: 'Boissons Chaudes' },
-  { id: '2', name: 'Café au Lait', price: 7, categoryId: '1', categoryName: 'Boissons Chaudes' },
-  { id: '3', name: 'Noisette', price: 6, categoryId: '1', categoryName: 'Boissons Chaudes' },
-  { id: '4', name: 'Cappuccino', price: 12, categoryId: '1', categoryName: 'Boissons Chaudes' },
-  { id: '5', name: 'Thé à la Menthe', price: 5, categoryId: '1', categoryName: 'Boissons Chaudes' },
-  { id: '6', name: 'Coca Cola', price: 8, categoryId: '2', categoryName: 'Boissons Froides' },
-  { id: '7', name: 'Fanta', price: 8, categoryId: '2', categoryName: 'Boissons Froides' },
-  { id: '8', name: 'Jus d\'Orange', price: 15, categoryId: '3', categoryName: 'Jus' },
-  { id: '9', name: 'Croissant', price: 8, categoryId: '4', categoryName: 'Pâtisserie' },
-  { id: '10', name: 'Msemen', price: 3, categoryId: '4', categoryName: 'Pâtisserie' },
-  { id: '11', name: 'Sandwich Thon', price: 18, categoryId: '5', categoryName: 'Sandwichs' },
-  { id: '12', name: 'Salade Marocaine', price: 15, categoryId: '6', categoryName: 'Salades' },
-];
-
 export default function AdminProductsScreen() {
   const router = useRouter();
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
-  const [categories] = useState<Category[]>(MOCK_CATEGORIES);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   
   // Form state
   const [formName, setFormName] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formCategoryId, setFormCategoryId] = useState('');
+
+  // Load data from Supabase
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [productsDb, categoriesDb] = await Promise.all([
+        productService.getAll(),
+        categoryService.getAll(),
+      ]);
+      
+      const categoriesData = categoriesDb.map(c => ({
+        id: c.id,
+        name: c.name,
+      }));
+      setCategories(categoriesData);
+      
+      const productsData = productsDb.map(p => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        categoryId: p.category_id,
+        categoryName: categoriesData.find(c => c.id === p.category_id)?.name,
+      }));
+      setProducts(productsData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      Alert.alert('Erreur', 'Impossible de charger les données');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Filter products by search
   const filteredProducts = products.filter(p => 
@@ -78,31 +91,57 @@ export default function AdminProductsScreen() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim() || !formPrice || !formCategoryId) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
 
-    const category = categories.find(c => c.id === formCategoryId);
-    const productData: Product = {
-      id: editingProduct?.id || Date.now().toString(),
-      name: formName.trim(),
-      price: parseFloat(formPrice),
-      categoryId: formCategoryId,
-      categoryName: category?.name,
-    };
+    setSaving(true);
+    
+    try {
+      const category = categories.find(c => c.id === formCategoryId);
+      
+      if (editingProduct) {
+        // Update in Supabase
+        await productService.update(editingProduct.id, {
+          name: formName.trim(),
+          price: parseFloat(formPrice),
+          category_id: formCategoryId,
+        });
+        
+        setProducts(prev => prev.map(p => p.id === editingProduct.id ? {
+          ...p,
+          name: formName.trim(),
+          price: parseFloat(formPrice),
+          categoryId: formCategoryId,
+          categoryName: category?.name,
+        } : p));
+      } else {
+        // Create in Supabase
+        const newProduct = await productService.create({
+          name: formName.trim(),
+          price: parseFloat(formPrice),
+          category_id: formCategoryId,
+          is_active: true,
+        });
+        
+        setProducts(prev => [...prev, {
+          id: newProduct.id,
+          name: newProduct.name,
+          price: newProduct.price,
+          categoryId: newProduct.category_id,
+          categoryName: category?.name,
+        }]);
+      }
 
-    if (editingProduct) {
-      // Update
-      setProducts(prev => prev.map(p => p.id === editingProduct.id ? productData : p));
-    } else {
-      // Create
-      setProducts(prev => [...prev, productData]);
+      setShowModal(false);
+    } catch (error) {
+      console.error('Error saving product:', error);
+      Alert.alert('Erreur', 'Impossible d\'enregistrer le produit');
+    } finally {
+      setSaving(false);
     }
-
-    setShowModal(false);
-    // TODO: Sync with Supabase
   };
 
   const handleDelete = (product: Product) => {
@@ -114,9 +153,14 @@ export default function AdminProductsScreen() {
         {
           text: 'Supprimer',
           style: 'destructive',
-          onPress: () => {
-            setProducts(prev => prev.filter(p => p.id !== product.id));
-            // TODO: Sync with Supabase
+          onPress: async () => {
+            try {
+              await productService.delete(product.id);
+              setProducts(prev => prev.filter(p => p.id !== product.id));
+            } catch (error) {
+              console.error('Error deleting product:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer le produit');
+            }
           },
         },
       ]

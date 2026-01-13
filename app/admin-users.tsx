@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Plus, Pencil, Trash2, User, Shield, ChefHat, Coffee, Users } from 'lucide-react-native';
 import { Modal, Input } from '@/components/ui';
+import { userService } from '../lib/services';
 
 interface StaffUser {
   id: string;
@@ -13,15 +14,6 @@ interface StaffUser {
   isActive: boolean;
 }
 
-// Mock data
-const MOCK_USERS: StaffUser[] = [
-  { id: '1', name: 'Admin', pin: '1111', role: 'admin', isActive: true },
-  { id: '2', name: 'Mohammed', pin: '2222', role: 'waiter', isActive: true },
-  { id: '3', name: 'Fatima', pin: '2223', role: 'waiter', isActive: true },
-  { id: '4', name: 'Cuisine', pin: '3333', role: 'kitchen', isActive: true },
-  { id: '5', name: 'Ahmed', pin: '2224', role: 'waiter', isActive: false },
-];
-
 const ROLE_CONFIG = {
   admin: { label: 'Admin', color: '#8B5CF6', icon: Shield },
   waiter: { label: 'Serveur', color: '#3B82F6', icon: Coffee },
@@ -30,14 +22,41 @@ const ROLE_CONFIG = {
 
 export default function AdminUsersScreen() {
   const router = useRouter();
-  const [users, setUsers] = useState<StaffUser[]>(MOCK_USERS);
+  const [users, setUsers] = useState<StaffUser[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<StaffUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   
   // Form state
   const [formName, setFormName] = useState('');
   const [formPin, setFormPin] = useState('');
   const [formRole, setFormRole] = useState<StaffUser['role']>('waiter');
+
+  // Load data from Supabase
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const usersDb = await userService.getAll();
+      const usersData = usersDb.map(u => ({
+        id: u.id,
+        name: u.name,
+        pin: u.pin,
+        role: u.role,
+        isActive: u.is_active,
+      }));
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      Alert.alert('Erreur', 'Impossible de charger les données');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const openAddModal = () => {
     setEditingUser(null);
@@ -55,7 +74,7 @@ export default function AdminUsersScreen() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim() || !formPin.trim()) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
@@ -75,29 +94,59 @@ export default function AdminUsersScreen() {
       return;
     }
 
-    const userData: StaffUser = {
-      id: editingUser?.id || Date.now().toString(),
-      name: formName.trim(),
-      pin: formPin,
-      role: formRole,
-      isActive: editingUser?.isActive ?? true,
-    };
+    setSaving(true);
+    
+    try {
+      if (editingUser) {
+        // Update in Supabase
+        await userService.update(editingUser.id, {
+          name: formName.trim(),
+          pin: formPin,
+          role: formRole,
+        });
+        setUsers(prev => prev.map(u => u.id === editingUser.id ? {
+          ...u,
+          name: formName.trim(),
+          pin: formPin,
+          role: formRole,
+        } : u));
+      } else {
+        // Create in Supabase
+        const newUserDb = await userService.create({
+          name: formName.trim(),
+          pin: formPin,
+          role: formRole,
+          is_active: true,
+        });
+        const userData: StaffUser = {
+          id: newUserDb.id,
+          name: newUserDb.name,
+          pin: newUserDb.pin,
+          role: newUserDb.role,
+          isActive: newUserDb.is_active,
+        };
+        setUsers(prev => [...prev, userData]);
+      }
 
-    if (editingUser) {
-      setUsers(prev => prev.map(u => u.id === editingUser.id ? userData : u));
-    } else {
-      setUsers(prev => [...prev, userData]);
+      setShowModal(false);
+    } catch (error) {
+      console.error('Error saving user:', error);
+      Alert.alert('Erreur', 'Impossible d\'enregistrer l\'utilisateur');
+    } finally {
+      setSaving(false);
     }
-
-    setShowModal(false);
-    // TODO: Sync with Supabase
   };
 
-  const handleToggleActive = (user: StaffUser) => {
-    setUsers(prev => 
-      prev.map(u => u.id === user.id ? { ...u, isActive: !u.isActive } : u)
-    );
-    // TODO: Sync with Supabase
+  const handleToggleActive = async (user: StaffUser) => {
+    try {
+      await userService.update(user.id, { is_active: !user.isActive });
+      setUsers(prev => 
+        prev.map(u => u.id === user.id ? { ...u, isActive: !u.isActive } : u)
+      );
+    } catch (error) {
+      console.error('Error updating user:', error);
+      Alert.alert('Erreur', 'Impossible de modifier le statut');
+    }
   };
 
   const handleDelete = (user: StaffUser) => {
@@ -109,9 +158,14 @@ export default function AdminUsersScreen() {
         {
           text: 'Supprimer',
           style: 'destructive',
-          onPress: () => {
-            setUsers(prev => prev.filter(u => u.id !== user.id));
-            // TODO: Sync with Supabase
+          onPress: async () => {
+            try {
+              await userService.delete(user.id);
+              setUsers(prev => prev.filter(u => u.id !== user.id));
+            } catch (error) {
+              console.error('Error deleting user:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer l\'utilisateur');
+            }
           },
         },
       ]

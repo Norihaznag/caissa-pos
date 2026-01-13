@@ -264,10 +264,25 @@ export const orderService = {
   },
 
   async getPending(): Promise<DbOrder[]> {
+    // Kitchen sees all orders that haven't been served yet (regardless of payment)
     const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .in('status', ['NEW', 'PREPARING'])
+      .eq('is_served', false)
+      .neq('status', 'CANCELLED')
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get orders for kitchen display (NEW, PREPARING, READY - not served)
+  async getForKitchen(): Promise<DbOrder[]> {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('is_served', false)
+      .in('status', ['NEW', 'PREPARING', 'READY'])
       .order('created_at', { ascending: true });
     
     if (error) throw error;
@@ -300,6 +315,18 @@ export const orderService = {
     const { data, error } = await supabase
       .from('orders')
       .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async markServed(id: string): Promise<DbOrder> {
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ is_served: true, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();

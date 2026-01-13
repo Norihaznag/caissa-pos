@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, CreditCard, Banknote, CheckCircle, Percent } from 'lucide-react-native';
 import { useAppStore, OrderItem } from '../lib/store';
+import { orderService, tableService } from '../lib/services';
 import * as Haptics from 'expo-haptics';
 
 type PaymentMethod = 'cash' | 'card';
@@ -24,6 +25,7 @@ export default function PaymentScreen() {
   const [amountReceived, setAmountReceived] = useState('');
   const [discountPercent, setDiscountPercent] = useState('');
   const [discountAmount, setDiscountAmount] = useState('');
+  const [processing, setProcessing] = useState(false);
 
   // Load order data
   useEffect(() => {
@@ -52,7 +54,7 @@ export default function PaymentScreen() {
   // Quick amount buttons
   const quickAmounts = [50, 100, 200, 500];
 
-  const handlePayment = () => {
+  const handlePayment = async () => {
     if (paymentMethod === 'cash' && received < total) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Montant Insuffisant', `Le montant reçu (${received} MAD) est inférieur au total (${total} MAD)`);
@@ -65,39 +67,55 @@ export default function PaymentScreen() {
       return;
     }
 
-    // Success haptic
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setProcessing(true);
+    
+    try {
+      // Update order status in Supabase
+      await orderService.updateStatus(orderId, 'PAID');
+      
+      // Free the table in Supabase
+      await tableService.setOpen(currentTableId);
+      
+      // Success haptic
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Get discount info
-    const discount = discountValue;
-    const discountType: 'percent' | 'amount' = discountPercent ? 'percent' : 'amount';
+      // Get discount info
+      const discount = discountValue;
+      const discountType: 'percent' | 'amount' = discountPercent ? 'percent' : 'amount';
 
-    // Complete payment and free table
-    completePaymentAndFreeTable(orderId, currentTableId, {
-      method: paymentMethod,
-      discount: discount,
-      discountType: discountType,
-    });
+      // Complete payment and free table in local store
+      completePaymentAndFreeTable(orderId, currentTableId, {
+        method: paymentMethod,
+        discount: discount,
+        discountType: discountType,
+      });
 
-    Alert.alert(
-      'Paiement Réussi ✓',
-      `Table ${tableNumber}\nTotal: ${total} MAD\n${paymentMethod === 'cash' ? `Rendu: ${change.toFixed(2)} MAD` : 'Payé par carte'}`,
-      [
-        {
-          text: 'Voir Reçu',
-          onPress: () => {
-            router.replace({
-              pathname: '/receipt',
-              params: { orderId }
-            });
+      Alert.alert(
+        'Paiement Réussi ✓',
+        `Table ${tableNumber}\nTotal: ${total} MAD\n${paymentMethod === 'cash' ? `Rendu: ${change.toFixed(2)} MAD` : 'Payé par carte'}`,
+        [
+          {
+            text: 'Voir Reçu',
+            onPress: () => {
+              router.replace({
+                pathname: '/receipt',
+                params: { orderId }
+              });
+            }
+          },
+          {
+            text: 'Terminer',
+            onPress: () => router.replace('/waiter-tables')
           }
-        },
-        {
-          text: 'Terminer',
-          onPress: () => router.replace('/waiter-tables')
-        }
-      ]
-    );
+        ]
+      );
+    } catch (error) {
+      console.error('Payment error:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Erreur', 'Impossible de traiter le paiement. Réessayez.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return (

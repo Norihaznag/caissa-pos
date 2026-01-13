@@ -66,13 +66,14 @@ CREATE TABLE IF NOT EXISTS orders (
   table_id UUID REFERENCES tables(id) ON DELETE SET NULL,
   waiter_id UUID REFERENCES users(id) ON DELETE SET NULL,
   status VARCHAR(20) DEFAULT 'NEW' CHECK (status IN ('NEW', 'PREPARING', 'READY', 'PAID', 'CANCELLED')),
+  is_served BOOLEAN DEFAULT false,
   total_amount DECIMAL(10, 2) DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Index for pending orders (kitchen view)
-CREATE INDEX IF NOT EXISTS idx_orders_pending ON orders(created_at) WHERE status IN ('NEW', 'PREPARING');
+-- Index for pending orders (kitchen view) - orders not yet served
+CREATE INDEX IF NOT EXISTS idx_orders_pending ON orders(created_at) WHERE is_served = false AND status != 'CANCELLED';
 
 -- Index for today's orders (reports)
 CREATE INDEX IF NOT EXISTS idx_orders_today ON orders(created_at);

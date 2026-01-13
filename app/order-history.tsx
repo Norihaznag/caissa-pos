@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, FlatList, RefreshControl, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Search, Calendar, Filter, Receipt, Clock } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { orderService, orderItemService, tableService, userService } from '../lib/services';
 
 type OrderStatus = 'PAID' | 'CANCELLED' | 'PENDING';
 
@@ -24,87 +25,64 @@ export default function OrderHistoryScreen() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<OrderStatus | 'ALL'>('ALL');
 
-  useEffect(() => {
-    loadOrders();
+  const loadOrders = useCallback(async () => {
+    try {
+      // Fetch all orders from Supabase
+      const [ordersDb, tablesDb, usersDb] = await Promise.all([
+        orderService.getAll(),
+        tableService.getAll(),
+        userService.getAll(),
+      ]);
+      
+      // Transform orders
+      const ordersData: OrderHistoryItem[] = await Promise.all(
+        ordersDb.map(async (o) => {
+          const items = await orderItemService.getByOrderId(o.id);
+          const table = tablesDb.find(t => t.id === o.table_id);
+          const waiter = usersDb.find(u => u.id === o.waiter_id);
+          const itemsCount = items.reduce((sum, i) => sum + i.quantity, 0);
+          
+          // Map status to simpler type
+          let status: OrderStatus = 'PENDING';
+          if (o.status === 'PAID') status = 'PAID';
+          else if (o.status === 'CANCELLED') status = 'CANCELLED';
+          
+          return {
+            id: o.id,
+            tableNumber: table?.number || 0,
+            waiterName: waiter?.name || 'Serveur',
+            createdAt: new Date(o.created_at),
+            completedAt: o.status === 'PAID' ? new Date(o.updated_at) : undefined,
+            status,
+            itemsCount,
+            total: o.total_amount,
+          };
+        })
+      );
+      
+      // Sort by creation time (newest first)
+      ordersData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setOrders(ordersData);
+    } catch (error) {
+      console.error('Error loading orders:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loadOrders = () => {
-    // Mock data - TODO: Replace with Supabase query
-    const mockOrders: OrderHistoryItem[] = [
-      {
-        id: 'ORD-001',
-        tableNumber: 5,
-        waiterName: 'Ahmed',
-        createdAt: new Date(Date.now() - 30 * 60 * 1000),
-        completedAt: new Date(Date.now() - 15 * 60 * 1000),
-        status: 'PAID',
-        itemsCount: 4,
-        total: 78,
-        paymentMethod: 'cash',
-      },
-      {
-        id: 'ORD-002',
-        tableNumber: 3,
-        waiterName: 'Fatima',
-        createdAt: new Date(Date.now() - 60 * 60 * 1000),
-        completedAt: new Date(Date.now() - 45 * 60 * 1000),
-        status: 'PAID',
-        itemsCount: 2,
-        total: 35,
-        paymentMethod: 'card',
-      },
-      {
-        id: 'ORD-003',
-        tableNumber: 7,
-        waiterName: 'Ahmed',
-        createdAt: new Date(Date.now() - 90 * 60 * 1000),
-        status: 'PENDING',
-        itemsCount: 6,
-        total: 145,
-      },
-      {
-        id: 'ORD-004',
-        tableNumber: 2,
-        waiterName: 'Youssef',
-        createdAt: new Date(Date.now() - 120 * 60 * 1000),
-        status: 'CANCELLED',
-        itemsCount: 3,
-        total: 52,
-      },
-      {
-        id: 'ORD-005',
-        tableNumber: 10,
-        waiterName: 'Fatima',
-        createdAt: new Date(Date.now() - 180 * 60 * 1000),
-        completedAt: new Date(Date.now() - 160 * 60 * 1000),
-        status: 'PAID',
-        itemsCount: 5,
-        total: 98,
-        paymentMethod: 'cash',
-      },
-      {
-        id: 'ORD-006',
-        tableNumber: 1,
-        waiterName: 'Ahmed',
-        createdAt: new Date(Date.now() - 240 * 60 * 1000),
-        completedAt: new Date(Date.now() - 220 * 60 * 1000),
-        status: 'PAID',
-        itemsCount: 2,
-        total: 45,
-        paymentMethod: 'card',
-      },
-    ];
-    setOrders(mockOrders);
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
+  useEffect(() => {
     loadOrders();
-    setTimeout(() => setRefreshing(false), 500);
-  };
+  }, [loadOrders]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadOrders();
+    setRefreshing(false);
+  }, [loadOrders]);
 
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {

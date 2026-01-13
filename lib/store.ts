@@ -51,6 +51,7 @@ export interface Order {
   tableNumber: number;
   items: OrderItem[];
   status: OrderStatus;
+  isServed: boolean;
   totalAmount: number;
   createdAt: Date;
   updatedAt: Date;
@@ -115,6 +116,7 @@ interface AppState {
   addOrder: (order: Order) => void;
   updateOrder: (id: string, data: Partial<Order>) => void;
   updateOrderStatus: (id: string, status: OrderStatus) => void;
+  markOrderServed: (id: string) => void;
   getOrderByTable: (tableNumber: number) => Order | undefined;
   getActiveOrderByTable: (tableNumber: number) => Order | undefined;
   
@@ -213,6 +215,12 @@ export const useAppStore = create<AppState>()(
       updateOrderStatus: (id, status) => set((state) => ({
         orders: state.orders.map((o) => 
           o.id === id ? { ...o, status, updatedAt: new Date() } : o
+        ),
+      })),
+      
+      markOrderServed: (id) => set((state) => ({
+        orders: state.orders.map((o) => 
+          o.id === id ? { ...o, isServed: true, updatedAt: new Date() } : o
         ),
       })),
       

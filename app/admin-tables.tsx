@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react-native';
 import { Modal, Input } from '@/components/ui';
+import { tableService } from '../lib/services';
 
 interface Table {
   id: string;
@@ -11,19 +12,37 @@ interface Table {
   status: 'open' | 'occupied';
 }
 
-// Mock data
-const MOCK_TABLES: Table[] = Array.from({ length: 12 }, (_, i) => ({
-  id: (i + 1).toString(),
-  number: i + 1,
-  status: 'open' as const,
-}));
-
 export default function AdminTablesScreen() {
   const router = useRouter();
-  const [tables, setTables] = useState<Table[]>(MOCK_TABLES);
+  const [tables, setTables] = useState<Table[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingTable, setEditingTable] = useState<Table | null>(null);
   const [formNumber, setFormNumber] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Load data from Supabase
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const tablesDb = await tableService.getAll();
+      const tablesData = tablesDb.map(t => ({
+        id: t.id,
+        number: t.number,
+        status: t.status,
+      }));
+      setTables(tablesData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      Alert.alert('Erreur', 'Impossible de charger les données');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const openAddModal = () => {
     setEditingTable(null);
@@ -38,7 +57,7 @@ export default function AdminTablesScreen() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const tableNumber = parseInt(formNumber);
     
     if (isNaN(tableNumber) || tableNumber <= 0) {
@@ -55,24 +74,38 @@ export default function AdminTablesScreen() {
       return;
     }
 
-    if (editingTable) {
-      // Update
-      setTables(prev => 
-        prev.map(t => t.id === editingTable.id ? { ...t, number: tableNumber } : t)
-          .sort((a, b) => a.number - b.number)
-      );
-    } else {
-      // Create
-      const newTable: Table = {
-        id: Date.now().toString(),
-        number: tableNumber,
-        status: 'open',
-      };
-      setTables(prev => [...prev, newTable].sort((a, b) => a.number - b.number));
-    }
+    setSaving(true);
+    
+    try {
+      if (editingTable) {
+        // Update in Supabase
+        await tableService.update(editingTable.id, { number: tableNumber });
+        setTables(prev => 
+          prev.map(t => t.id === editingTable.id ? { ...t, number: tableNumber } : t)
+            .sort((a, b) => a.number - b.number)
+        );
+      } else {
+        // Create in Supabase
+        const newTableDb = await tableService.create({
+          number: tableNumber,
+          status: 'open',
+          current_order_id: null,
+        });
+        const newTable: Table = {
+          id: newTableDb.id,
+          number: newTableDb.number,
+          status: 'open',
+        };
+        setTables(prev => [...prev, newTable].sort((a, b) => a.number - b.number));
+      }
 
-    setShowModal(false);
-    // TODO: Sync with Supabase
+      setShowModal(false);
+    } catch (error) {
+      console.error('Error saving table:', error);
+      Alert.alert('Erreur', 'Impossible d\'enregistrer la table');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = (table: Table) => {
@@ -89,9 +122,14 @@ export default function AdminTablesScreen() {
         {
           text: 'Supprimer',
           style: 'destructive',
-          onPress: () => {
-            setTables(prev => prev.filter(t => t.id !== table.id));
-            // TODO: Sync with Supabase
+          onPress: async () => {
+            try {
+              await tableService.delete(table.id);
+              setTables(prev => prev.filter(t => t.id !== table.id));
+            } catch (error) {
+              console.error('Error deleting table:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer la table');
+            }
           },
         },
       ]

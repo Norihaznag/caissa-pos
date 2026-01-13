@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, FlatList, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ShoppingCart, Plus, Minus, Trash2, CreditCard, MessageSquare, Search, X } from 'lucide-react-native';
 import { useAppStore, Order, OrderItem } from '../lib/store';
+import { categoryService, productService, orderService, orderItemService, tableService } from '../lib/services';
 import * as Haptics from 'expo-haptics';
 
 type CartItem = {
@@ -32,72 +33,70 @@ export default function WaiterOrderScreen() {
   const setCategories = useAppStore((state) => state.setCategories);
   const setProducts = useAppStore((state) => state.setProducts);
 
-  useEffect(() => {
-    // Initialize mock data if empty
-    if (categories.length === 0) {
-      setCategories([
-        { id: '1', name: 'Boissons Chaudes', order: 1 },
-        { id: '2', name: 'Boissons Froides', order: 2 },
-        { id: '3', name: 'Jus', order: 3 },
-        { id: '4', name: 'Pâtisserie', order: 4 },
-        { id: '5', name: 'Sandwichs', order: 5 },
-        { id: '6', name: 'Salades', order: 6 },
-      ]);
-    }
-    if (products.length === 0) {
-      setProducts([
-        { id: '1', name: 'Café Noir', price: 5, categoryId: '1', isActive: true },
-        { id: '2', name: 'Café au Lait', price: 7, categoryId: '1', isActive: true },
-        { id: '3', name: 'Noisette', price: 6, categoryId: '1', isActive: true },
-        { id: '4', name: 'Cappuccino', price: 12, categoryId: '1', isActive: true },
-        { id: '5', name: 'Thé à la Menthe', price: 5, categoryId: '1', isActive: true },
-        { id: '6', name: 'Thé Vert', price: 5, categoryId: '1', isActive: true },
-        { id: '7', name: 'Coca Cola', price: 8, categoryId: '2', isActive: true },
-        { id: '8', name: 'Fanta', price: 8, categoryId: '2', isActive: true },
-        { id: '9', name: 'Sprite', price: 8, categoryId: '2', isActive: true },
-        { id: '10', name: 'Eau Minérale', price: 5, categoryId: '2', isActive: true },
-        { id: '11', name: 'Schweppes', price: 8, categoryId: '2', isActive: true },
-        { id: '12', name: 'Jus d\'Orange', price: 15, categoryId: '3', isActive: true },
-        { id: '13', name: 'Jus de Pomme', price: 15, categoryId: '3', isActive: true },
-        { id: '14', name: 'Jus d\'Avocat', price: 20, categoryId: '3', isActive: true },
-        { id: '15', name: 'Jus de Fraise', price: 18, categoryId: '3', isActive: true },
-        { id: '16', name: 'Croissant', price: 8, categoryId: '4', isActive: true },
-        { id: '17', name: 'Pain au Chocolat', price: 8, categoryId: '4', isActive: true },
-        { id: '18', name: 'Msemen', price: 3, categoryId: '4', isActive: true },
-        { id: '19', name: 'Harcha', price: 3, categoryId: '4', isActive: true },
-        { id: '20', name: 'Baghrir', price: 10, categoryId: '4', isActive: true },
-        { id: '21', name: 'Sandwich Thon', price: 18, categoryId: '5', isActive: true },
-        { id: '22', name: 'Sandwich Poulet', price: 20, categoryId: '5', isActive: true },
-        { id: '23', name: 'Sandwich Fromage', price: 15, categoryId: '5', isActive: true },
-        { id: '24', name: 'Tacos Poulet', price: 25, categoryId: '5', isActive: true },
-        { id: '25', name: 'Salade Marocaine', price: 15, categoryId: '6', isActive: true },
-        { id: '26', name: 'Salade Verte', price: 12, categoryId: '6', isActive: true },
-        { id: '27', name: 'Salade Mixte', price: 18, categoryId: '6', isActive: true },
-      ]);
-    }
-
-    // Load existing order if editing
-    if (orderId) {
-      const existingOrder = orders.find(o => o.id === orderId);
-      if (existingOrder && existingOrder.items) {
-        const cartItems: CartItem[] = existingOrder.items.map(item => ({
-          productId: item.productId,
-          productName: item.productName,
-          price: item.price,
-          quantity: item.quantity,
-          note: item.note,
-        }));
-        setCart(cartItems);
-      }
-    }
-  }, []);
-
   const [selectedCategory, setSelectedCategory] = useState<string>(categories[0]?.id || '1');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [editingNoteFor, setEditingNoteFor] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Load data from Supabase
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch categories and products from Supabase
+      const [categoriesDb, productsDb] = await Promise.all([
+        categoryService.getAll(),
+        productService.getAll(),
+      ]);
+      
+      // Transform and set categories
+      const categoriesData = categoriesDb.map(c => ({
+        id: c.id,
+        name: c.name,
+        order: c.display_order,
+      }));
+      setCategories(categoriesData);
+      
+      // Transform and set products
+      const productsData = productsDb.map(p => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        categoryId: p.category_id,
+        isActive: p.is_active,
+      }));
+      setProducts(productsData);
+      
+      // Set initial category
+      if (categoriesData.length > 0) {
+        setSelectedCategory(categoriesData[0].id);
+      }
+      
+      // Load existing order if editing
+      if (orderId) {
+        const itemsDb = await orderItemService.getByOrderId(orderId);
+        const cartItems: CartItem[] = itemsDb.map(item => ({
+          productId: item.product_id,
+          productName: item.product_name,
+          price: item.price,
+          quantity: item.quantity,
+        }));
+        setCart(cartItems);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      Alert.alert('Erreur', 'Impossible de charger les données');
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId, setCategories, setProducts]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Filter products by selected category and search
   const filteredProducts = products.filter(p => {
@@ -183,74 +182,122 @@ export default function WaiterOrderScreen() {
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   // Send order to kitchen
-  const sendToKitchen = () => {
+  const sendToKitchen = async () => {
     if (cart.length === 0) {
       Alert.alert('Panier Vide', 'Ajoutez des produits avant d\'envoyer.');
       return;
     }
 
-    if (orderId) {
-      // Edit existing order - convert cart items to order items
-      const orderItems: OrderItem[] = cart.map((item, index) => ({
-        id: item.productId + '-' + index,
-        productId: item.productId,
-        productName: item.productName,
-        price: item.price,
-        quantity: item.quantity,
-        note: item.note,
-      }));
-      
-      useAppStore.getState().updateOrder(orderId, {
-        items: orderItems,
-        totalAmount: total,
-        updatedAt: new Date()
-      });
-      Alert.alert('Commande Modifiée', 'La commande a été mise à jour.', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
-    } else {
-      // Create new order
-      const waiterName = user?.name || 'Serveur';
-      const newOrderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-      
-      // Convert cart items to order items
-      const orderItems: OrderItem[] = cart.map((item, index) => ({
-        id: item.productId + '-' + index,
-        productId: item.productId,
-        productName: item.productName,
-        price: item.price,
-        quantity: item.quantity,
-        note: item.note,
-      }));
-      
-      const newOrder: Order = {
-        id: newOrderId,
-        tableId: tableId || `table-${tableNumber}`,
-        tableNumber: tableNumber,
-        items: orderItems,
-        status: 'NEW',
-        totalAmount: total,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        waiterId: user?.id,
-        waiterName: waiterName,
-      };
-      
-      useAppStore.getState().createOrderAndOccupyTable(newOrder, tableId || `table-${tableNumber}`);
-      
-      Alert.alert(
-        'Commande Envoyée',
-        `Table ${tableNumber}\nTotal: ${total} MAD\n\nLa commande a été envoyée à la cuisine.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setCart([]);
-              router.back();
+    try {
+      if (orderId) {
+        // Edit existing order - update items in Supabase
+        // First delete old items, then add new ones
+        const existingItems = await orderItemService.getByOrderId(orderId);
+        for (const item of existingItems) {
+          await orderItemService.delete(item.id);
+        }
+        
+        // Add new items
+        const orderItems = cart.map(item => ({
+          order_id: orderId,
+          product_id: item.productId,
+          product_name: item.productName,
+          price: item.price,
+          quantity: item.quantity,
+        }));
+        await orderItemService.createMany(orderItems);
+        
+        // Update order total
+        await orderService.updateStatus(orderId, 'NEW');
+        
+        // Update local store
+        const storeItems: OrderItem[] = cart.map((item, index) => ({
+          id: item.productId + '-' + index,
+          productId: item.productId,
+          productName: item.productName,
+          price: item.price,
+          quantity: item.quantity,
+          note: item.note,
+        }));
+        
+        useAppStore.getState().updateOrder(orderId, {
+          items: storeItems,
+          totalAmount: total,
+          updatedAt: new Date()
+        });
+        
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Commande Modifiée', 'La commande a été mise à jour.', [
+          { text: 'OK', onPress: () => router.back() }
+        ]);
+      } else {
+        // Create new order in Supabase
+        const newOrderDb = await orderService.create({
+          table_id: tableId,
+          waiter_id: user?.id || null,
+          status: 'NEW',
+          is_served: false,
+          total_amount: total,
+        });
+        
+        // Create order items
+        const orderItems = cart.map(item => ({
+          order_id: newOrderDb.id,
+          product_id: item.productId,
+          product_name: item.productName,
+          price: item.price,
+          quantity: item.quantity,
+        }));
+        await orderItemService.createMany(orderItems);
+        
+        // Update table status
+        await tableService.setOccupied(tableId, newOrderDb.id);
+        
+        // Update local store
+        const storeItems: OrderItem[] = cart.map((item, index) => ({
+          id: item.productId + '-' + index,
+          productId: item.productId,
+          productName: item.productName,
+          price: item.price,
+          quantity: item.quantity,
+          note: item.note,
+        }));
+        
+        const newOrder: Order = {
+          id: newOrderDb.id,
+          tableId: tableId,
+          tableNumber: tableNumber,
+          items: storeItems,
+          status: 'NEW',
+          isServed: false,
+          totalAmount: total,
+          createdAt: new Date(newOrderDb.created_at),
+          updatedAt: new Date(newOrderDb.updated_at),
+          waiterId: user?.id,
+          waiterName: user?.name || 'Serveur',
+        };
+        
+        useAppStore.getState().createOrderAndOccupyTable(newOrder, tableId);
+        
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          'Commande Envoyée',
+          `Table ${tableNumber}\nTotal: ${total} MAD\n\nLa commande a été envoyée à la cuisine.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setCart([]);
+                router.back();
+              }
             }
-          }
-        ]
-      );
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error saving order:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Erreur', 'Impossible d\'enregistrer la commande. Vérifiez votre connexion.');
     }
   };
 
@@ -418,9 +465,11 @@ export default function WaiterOrderScreen() {
                       </View>
                     </View>
                     {item.note && (
-                      <Text className="text-sm text-yellow-700 bg-yellow-50 px-2 py-1 rounded mb-2">
-                        📝 {item.note}
-                      </Text>
+                      <View className="bg-yellow-50 px-2 py-1 rounded mb-2">
+                        <Text className="text-sm text-yellow-700">
+                          📝 {item.note}
+                        </Text>
+                      </View>
                     )}
                     <View className="flex-row items-center justify-between">
                       <View className="flex-row items-center gap-3">

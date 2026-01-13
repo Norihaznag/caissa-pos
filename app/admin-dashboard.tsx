@@ -1,46 +1,63 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Package, Grid3x3, Table2, FileText, LogOut, RefreshCw, Users, Settings } from 'lucide-react-native';
+import { useAppStore } from '../lib/store';
+import { productService, categoryService, tableService, orderService, userService } from '../lib/services';
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
-  const [userName, setUserName] = useState('');
+  const user = useAppStore((state) => state.user);
+  const logout = useAppStore((state) => state.logout);
+  const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
-    productsCount: 27,
-    categoriesCount: 6,
-    tablesCount: 12,
-    todayOrders: 34,
-    todayRevenue: 2450,
+    productsCount: 0,
+    categoriesCount: 0,
+    tablesCount: 0,
+    usersCount: 0,
+    todayOrders: 0,
+    todayRevenue: 0,
   });
 
-  useEffect(() => {
-    loadUserData();
-    loadStats();
+  const loadStats = useCallback(async () => {
+    try {
+      // Fetch counts from Supabase
+      const [products, categories, tables, users, todayOrders] = await Promise.all([
+        productService.getAll(),
+        categoryService.getAll(),
+        tableService.getAll(),
+        userService.getAll(),
+        orderService.getToday(),
+      ]);
+      
+      // Calculate today's revenue
+      const todayRevenue = todayOrders
+        .filter(o => o.status === 'PAID')
+        .reduce((sum, o) => sum + o.total_amount, 0);
+      
+      setStats({
+        productsCount: products.length,
+        categoriesCount: categories.length,
+        tablesCount: tables.length,
+        usersCount: users.length,
+        todayOrders: todayOrders.length,
+        todayRevenue,
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
   }, []);
 
-  const loadUserData = async () => {
-    try {
-      const name = await AsyncStorage.getItem('user_name');
-      if (name) setUserName(name);
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
-  };
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
-  const loadStats = async () => {
-    // TODO: Replace with actual Supabase queries
-    // For now using mock data
-    setStats({
-      productsCount: 27,
-      categoriesCount: 6,
-      tablesCount: 12,
-      todayOrders: 34,
-      todayRevenue: 2450,
-    });
-  };
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
+  }, [loadStats]);
 
   const handleLogout = () => {
     Alert.alert(
@@ -51,17 +68,13 @@ export default function AdminDashboardScreen() {
         {
           text: 'Déconnexion',
           style: 'destructive',
-          onPress: async () => {
-            await AsyncStorage.clear();
+          onPress: () => {
+            logout();
             router.replace('/');
           },
         },
       ]
     );
-  };
-
-  const handleRefresh = () => {
-    loadStats();
   };
 
   const menuItems = [
@@ -106,7 +119,7 @@ export default function AdminDashboardScreen() {
       title: 'Utilisateurs',
       description: 'Gérer le personnel',
       icon: Users,
-      count: 5,
+      count: stats.usersCount,
       route: '/admin-users',
       color: '#EC4899',
     },
@@ -127,11 +140,11 @@ export default function AdminDashboardScreen() {
         <View className="flex-row items-center justify-between">
           <View>
             <Text className="text-xs text-gray-500">Bienvenue</Text>
-            <Text className="text-xl font-bold text-gray-900">{userName}</Text>
+            <Text className="text-xl font-bold text-gray-900">{user?.name || 'Admin'}</Text>
           </View>
           <View className="flex-row items-center gap-3">
             <TouchableOpacity
-              onPress={handleRefresh}
+              onPress={onRefresh}
               className="w-10 h-10 items-center justify-center"
             >
               <RefreshCw size={20} color="#3B82F6" />
@@ -146,7 +159,12 @@ export default function AdminDashboardScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+      <ScrollView 
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Stats Summary */}
         <View className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
           <Text className="text-sm font-semibold text-gray-900 mb-3">Aujourd'hui</Text>

@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } fro
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
+import { userService } from '../lib/services';
 import * as Haptics from 'expo-haptics';
 
 export default function LoginScreen() {
@@ -33,50 +34,39 @@ export default function LoginScreen() {
     setLoading(true);
     
     try {
-      // TODO: Replace with actual Supabase authentication
-      // For now, demo authentication:
-      // PIN 1111 = Admin
-      // PIN 2222 = Waiter
-      // PIN 3333 = Kitchen
+      // Authenticate with Supabase
+      const user = await userService.authenticateByPin(pinCode);
       
-      let role: 'admin' | 'waiter' | 'kitchen' | null = null;
-      let userName = '';
-      
-      if (pinCode === '1111') {
-        role = 'admin';
-        userName = 'Admin';
-      } else if (pinCode === '2222') {
-        role = 'waiter';
-        userName = 'Serveur';
-      } else if (pinCode === '3333') {
-        role = 'kitchen';
-        userName = 'Cuisine';
-      } else {
+      if (!user) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert('Erreur', 'Code PIN incorrect');
         setPin('');
-        setLoading(false);
         return;
       }
       
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
       // Use Zustand store for login
       login({
-        id: `user-${pinCode}`,
-        name: userName,
-        pin: pinCode,
-        role: role,
+        id: user.id,
+        name: user.name,
+        pin: user.pin,
+        role: user.role,
       });
       
       // Navigate based on role
-      if (role === 'waiter') {
+      if (user.role === 'waiter') {
         router.replace('/waiter-tables');
-      } else if (role === 'kitchen') {
+      } else if (user.role === 'kitchen') {
         router.replace('/kitchen-orders');
-      } else if (role === 'admin') {
+      } else if (user.role === 'admin') {
         router.replace('/admin-dashboard');
       }
       
     } catch (error) {
-      Alert.alert('Erreur', 'Erreur de connexion');
+      console.error('Authentication error:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Erreur', 'Erreur de connexion au serveur');
       setPin('');
     } finally {
       setLoading(false);
@@ -159,14 +149,6 @@ export default function LoginScreen() {
             <ActivityIndicator size="large" color="#3B82F6" />
           </View>
         )}
-
-        {/* Demo Info */}
-        <View className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <Text className="text-xs text-blue-900 font-semibold mb-2">DEMO:</Text>
-          <Text className="text-xs text-blue-800">1111 = Admin</Text>
-          <Text className="text-xs text-blue-800">2222 = Serveur</Text>
-          <Text className="text-xs text-blue-800">3333 = Cuisine</Text>
-        </View>
       </View>
     </SafeAreaView>
   );

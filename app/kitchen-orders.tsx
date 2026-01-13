@@ -1,36 +1,113 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, FlatList, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { RefreshCw, LogOut, Clock, ChefHat } from 'lucide-react-native';
+import { RefreshCw, LogOut, Clock, ChefHat, CreditCard } from 'lucide-react-native';
 import { useAppStore, Order, OrderStatus } from '../lib/store';
+import { orderService, orderItemService, tableService } from '../lib/services';
 import * as Haptics from 'expo-haptics';
 
 export default function KitchenOrdersScreen() {
   const router = useRouter();
   const orders = useAppStore((state) => state.orders);
+  const setOrders = useAppStore((state) => state.setOrders);
   const updateOrderStatus = useAppStore((state) => state.updateOrderStatus);
+  const markOrderServed = useAppStore((state) => state.markOrderServed);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Filter only active orders (not PAID or CANCELLED)
-  const activeOrders = orders.filter(o => o.status !== 'PAID' && o.status !== 'CANCELLED');
+  // Filter only active orders (not served yet)
+  const activeOrders = orders.filter(o => !o.isServed && o.status !== 'CANCELLED');
 
-  const loadOrders = () => {
-    // Orders are already in the store, just refresh
-    setRefreshing(true);
-    // TODO: Fetch from Supabase when connected
-    setTimeout(() => setRefreshing(false), 500);
-  };
+  const loadOrders = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      
+      // Fetch kitchen orders from Supabase (not served, not cancelled)
+      const ordersDb = await orderService.getForKitchen();
+      const tablesDb = await tableService.getAll();
+      
+      // Transform orders and fetch order items
+      const ordersData: Order[] = await Promise.all(
+        ordersDb.map(async (o) => {
+          const itemsDb = await orderItemService.getByOrderId(o.id);
+          const table = tablesDb.find(t => t.id === o.table_id);
+          
+          return {
+            id: o.id,
+            tableId: o.table_id,
+            tableNumber: table?.number || 0,
+            items: itemsDb.map(i => ({
+              id: i.id,
+              productId: i.product_id,
+              productName: i.product_name,
+              price: i.price,
+              quantity: i.quantity,
+            })),
+            status: o.status,
+            isServed: o.is_served,
+            totalAmount: o.total_amount,
+            createdAt: new Date(o.created_at),
+            updatedAt: new Date(o.updated_at),
+            waiterId: o.waiter_id || undefined,
+          };
+        })
+      );
+      
+      setOrders(ordersData);
+    } catch (error) {
+      console.error('Error loading orders:', error);
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  }, [setOrders]);
+
+  useEffect(() => {
+    loadOrders();
+    
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(loadOrders, 10000);
+    return () => clearInterval(interval);
+  }, [loadOrders]);
 
   const onRefresh = () => {
     loadOrders();
   };
 
-  const handleStatusChange = (orderId: string, newStatus: OrderStatus) => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    updateOrderStatus(orderId, newStatus);
-    const statusText = newStatus === 'PREPARING' ? 'En préparation' : 'Prête';
-    Alert.alert('Statut mis à jour', `Commande marquée comme "${statusText}"`);
+  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    try {
+      // Update in Supabase
+      await orderService.updateStatus(orderId, newStatus);
+      
+      // Update local store
+      updateOrderStatus(orderId, newStatus);
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const statusText = newStatus === 'PREPARING' ? 'En préparation' : 'Prête';
+      Alert.alert('Statut mis à jour', `Commande marquée comme "${statusText}"`);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Erreur', 'Impossible de mettre à jour le statut');
+    }
+  };
+
+  const handleMarkServed = async (orderId: string) => {
+    try {
+      // Mark as served in Supabase
+      await orderService.markServed(orderId);
+      
+      // Update local store
+      markOrderServed(orderId);
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Commande Servie', 'La commande a été livrée au client.');
+    } catch (error) {
+      console.error('Error marking served:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Erreur', 'Impossible de marquer comme servie');
+    }
   };
 
   const handleLogout = () => {
@@ -131,19 +208,39 @@ export default function KitchenOrdersScreen() {
       );
     }
 
+    if (order.status === 'READY') {
+      return (
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#3B82F6',
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            borderRadius: 4,
+          }}
+          onPress={() => handleMarkServed(order.id)}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600', textAlign: 'center' }}>
+            ✓ Servir
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+
+    // PAID orders still in kitchen (waiting to be served)
     return (
-      <View
+      <TouchableOpacity
         style={{
-          backgroundColor: '#F3F4F6',
+          backgroundColor: '#8B5CF6',
           paddingVertical: 10,
           paddingHorizontal: 16,
           borderRadius: 4,
         }}
+        onPress={() => handleMarkServed(order.id)}
       >
-        <Text style={{ color: '#6B7280', fontSize: 14, fontWeight: '600', textAlign: 'center' }}>
-          Terminée
+        <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600', textAlign: 'center' }}>
+          ✓ Servir (Payée)
         </Text>
-      </View>
+      </TouchableOpacity>
     );
   };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LogOut, RefreshCw, CreditCard, ShoppingBag, Check, Table2 } from "lucide-react-native";
 import { useAppStore, Table as TableType, Order } from "../lib/store";
+import { tableService, orderService, orderItemService } from "../lib/services";
 import { TableSkeleton } from "@/components/ui";
 import * as Haptics from "expo-haptics";
 
@@ -23,33 +24,78 @@ export default function WaiterTablesScreen() {
   const tables = useAppStore((state) => state.tables);
   const orders = useAppStore((state) => state.orders);
   const setTables = useAppStore((state) => state.setTables);
+  const setOrders = useAppStore((state) => state.setOrders);
   const updateTable = useAppStore((state) => state.updateTable);
   const cancelOrderAndFreeTable = useAppStore((state) => state.cancelOrderAndFreeTable);
   const logout = useAppStore((state) => state.logout);
 
-  useEffect(() => {
-    loadTables();
-  }, []);
-
-  const loadTables = async () => {
+  const loadTables = useCallback(async () => {
     try {
-      // Initialize tables if empty
-      if (tables.length === 0) {
-        const initialTables: TableType[] = Array.from({ length: 12 }, (_, i) => ({
-          id: (i + 1).toString(),
-          number: i + 1,
-          status: 'open' as const,
-        }));
-        setTables(initialTables);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Fetch tables from Supabase
+      const tablesDb = await tableService.getAll();
+      const ordersDb = await orderService.getPending();
+      
+      // Transform tables
+      const tablesData: TableType[] = await Promise.all(
+        tablesDb.map(async (t) => {
+          let activeOrderTotal = 0;
+          if (t.current_order_id) {
+            const order = await orderService.getById(t.current_order_id);
+            if (order) {
+              activeOrderTotal = order.total_amount;
+            }
+          }
+          return {
+            id: t.id,
+            number: t.number,
+            status: t.status,
+            currentOrderId: t.current_order_id || undefined,
+            activeOrderTotal: activeOrderTotal || undefined,
+          };
+        })
+      );
+      
+      // Transform orders
+      const ordersData: Order[] = await Promise.all(
+        ordersDb.map(async (o) => {
+          const itemsDb = await orderItemService.getByOrderId(o.id);
+          const table = tablesDb.find(t => t.id === o.table_id);
+          
+          return {
+            id: o.id,
+            tableId: o.table_id,
+            tableNumber: table?.number || 0,
+            items: itemsDb.map(i => ({
+              id: i.id,
+              productId: i.product_id,
+              productName: i.product_name,
+              price: i.price,
+              quantity: i.quantity,
+            })),
+            status: o.status,
+            isServed: o.is_served,
+            totalAmount: o.total_amount,
+            createdAt: new Date(o.created_at),
+            updatedAt: new Date(o.updated_at),
+            waiterId: o.waiter_id || undefined,
+          };
+        })
+      );
+      
+      setTables(tablesData);
+      setOrders(ordersData);
     } catch (error) {
       console.error("Error loading tables:", error);
+      Alert.alert("Erreur", "Impossible de charger les tables");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [setTables, setOrders]);
+
+  useEffect(() => {
+    loadTables();
+  }, [loadTables]);
 
   const onRefresh = () => {
     setRefreshing(true);

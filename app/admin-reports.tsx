@@ -1,32 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, RefreshCw, TrendingUp, ShoppingCart, Clock, History } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { orderService, orderItemService, tableService } from '../lib/services';
 
 interface OrderSummary {
   id: string;
   tableNumber: number;
   totalAmount: number;
   itemsCount: number;
-  status: 'PAID' | 'READY' | 'NEW' | 'PREPARING';
+  status: 'PAID' | 'READY' | 'NEW' | 'PREPARING' | 'CANCELLED';
   createdAt: Date;
 }
-
-// Mock data
-const generateMockOrders = (): OrderSummary[] => {
-  const statuses: OrderSummary['status'][] = ['PAID', 'READY', 'PAID', 'PAID', 'READY'];
-  return Array.from({ length: 15 }, (_, i) => ({
-    id: (i + 1).toString(),
-    tableNumber: Math.floor(Math.random() * 12) + 1,
-    totalAmount: Math.floor(Math.random() * 150) + 20,
-    itemsCount: Math.floor(Math.random() * 6) + 1,
-    status: statuses[i % statuses.length],
-    createdAt: new Date(Date.now() - Math.random() * 8 * 60 * 60 * 1000), // Random time today
-  })).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-};
 
 export default function AdminReportsScreen() {
   const router = useRouter();
@@ -34,17 +22,46 @@ export default function AdminReportsScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedDate] = useState(new Date());
 
-  useEffect(() => {
-    loadOrders();
+  const loadOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Fetch today's orders from Supabase
+      const [ordersDb, tablesDb] = await Promise.all([
+        orderService.getToday(),
+        tableService.getAll(),
+      ]);
+      
+      // Transform orders with item counts
+      const ordersData: OrderSummary[] = await Promise.all(
+        ordersDb.map(async (o) => {
+          const items = await orderItemService.getByOrderId(o.id);
+          const table = tablesDb.find(t => t.id === o.table_id);
+          const itemsCount = items.reduce((sum, i) => sum + i.quantity, 0);
+          
+          return {
+            id: o.id,
+            tableNumber: table?.number || 0,
+            totalAmount: o.total_amount,
+            itemsCount,
+            status: o.status,
+            createdAt: new Date(o.created_at),
+          };
+        })
+      );
+      
+      // Sort by creation time (newest first)
+      ordersData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setOrders(ordersData);
+    } catch (error) {
+      console.error('Error loading orders:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loadOrders = async () => {
-    setLoading(true);
-    // TODO: Replace with Supabase query
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setOrders(generateMockOrders());
-    setLoading(false);
-  };
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
 
   // Calculate stats
   const paidOrders = orders.filter(o => o.status === 'PAID');
@@ -57,6 +74,7 @@ export default function AdminReportsScreen() {
       READY: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Prête' },
       PREPARING: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'En cours' },
       NEW: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Nouvelle' },
+      CANCELLED: { bg: 'bg-red-100', text: 'text-red-700', label: 'Annulée' },
     };
     return styles[status];
   };

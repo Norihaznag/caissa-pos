@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Plus, Pencil, Trash2, Grid3x3 } from 'lucide-react-native';
 import { Modal, Input } from '@/components/ui';
+import { categoryService, productService } from '../lib/services';
 
 interface Category {
   id: string;
@@ -12,22 +13,42 @@ interface Category {
   productCount: number;
 }
 
-// Mock data
-const MOCK_CATEGORIES: Category[] = [
-  { id: '1', name: 'Boissons Chaudes', order: 1, productCount: 7 },
-  { id: '2', name: 'Boissons Froides', order: 2, productCount: 7 },
-  { id: '3', name: 'Jus Frais', order: 3, productCount: 6 },
-  { id: '4', name: 'Pâtisserie', order: 4, productCount: 7 },
-  { id: '5', name: 'Sandwichs', order: 5, productCount: 6 },
-  { id: '6', name: 'Salades', order: 6, productCount: 4 },
-];
-
 export default function AdminCategoriesScreen() {
   const router = useRouter();
-  const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formName, setFormName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Load data from Supabase
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [categoriesDb, productsDb] = await Promise.all([
+        categoryService.getAll(),
+        productService.getAll(),
+      ]);
+      
+      const categoriesData = categoriesDb.map(c => ({
+        id: c.id,
+        name: c.name,
+        order: c.display_order,
+        productCount: productsDb.filter(p => p.category_id === c.id).length,
+      }));
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      Alert.alert('Erreur', 'Impossible de charger les données');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const openAddModal = () => {
     setEditingCategory(null);
@@ -41,30 +62,43 @@ export default function AdminCategoriesScreen() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim()) {
       Alert.alert('Erreur', 'Veuillez entrer un nom de catégorie');
       return;
     }
 
-    if (editingCategory) {
-      // Update
-      setCategories(prev => 
-        prev.map(c => c.id === editingCategory.id ? { ...c, name: formName.trim() } : c)
-      );
-    } else {
-      // Create
-      const newCategory: Category = {
-        id: Date.now().toString(),
-        name: formName.trim(),
-        order: categories.length + 1,
-        productCount: 0,
-      };
-      setCategories(prev => [...prev, newCategory]);
-    }
+    setSaving(true);
+    
+    try {
+      if (editingCategory) {
+        // Update in Supabase
+        await categoryService.update(editingCategory.id, { name: formName.trim() });
+        setCategories(prev => 
+          prev.map(c => c.id === editingCategory.id ? { ...c, name: formName.trim() } : c)
+        );
+      } else {
+        // Create in Supabase
+        const newCategoryDb = await categoryService.create({
+          name: formName.trim(),
+          display_order: categories.length + 1,
+        });
+        const newCategory: Category = {
+          id: newCategoryDb.id,
+          name: newCategoryDb.name,
+          order: newCategoryDb.display_order,
+          productCount: 0,
+        };
+        setCategories(prev => [...prev, newCategory]);
+      }
 
-    setShowModal(false);
-    // TODO: Sync with Supabase
+      setShowModal(false);
+    } catch (error) {
+      console.error('Error saving category:', error);
+      Alert.alert('Erreur', 'Impossible d\'enregistrer la catégorie');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = (category: Category) => {
@@ -84,9 +118,14 @@ export default function AdminCategoriesScreen() {
         {
           text: 'Supprimer',
           style: 'destructive',
-          onPress: () => {
-            setCategories(prev => prev.filter(c => c.id !== category.id));
-            // TODO: Sync with Supabase
+          onPress: async () => {
+            try {
+              await categoryService.delete(category.id);
+              setCategories(prev => prev.filter(c => c.id !== category.id));
+            } catch (error) {
+              console.error('Error deleting category:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer la catégorie');
+            }
           },
         },
       ]
