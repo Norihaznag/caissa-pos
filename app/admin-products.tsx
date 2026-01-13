@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Pencil, Trash2, Search } from 'lucide-react-native';
+import { ArrowLeft, Plus, Pencil, Trash2, Search, Package } from 'lucide-react-native';
 import { Modal, Input } from '@/components/ui';
 
 // Types
