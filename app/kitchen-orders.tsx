@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, FlatList, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { RefreshCw, LogOut, Clock, ChefHat, CreditCard } from 'lucide-react-native';
+import { RefreshCw, LogOut, Clock, ChefHat, CreditCard, Volume2 } from 'lucide-react-native';
 import { useAppStore, Order, OrderStatus } from '../lib/store';
 import { orderService, orderItemService, tableService } from '../lib/services';
 import * as Haptics from 'expo-haptics';
+import { useNewOrderNotification } from '../lib/sounds';
 
 export default function KitchenOrdersScreen() {
   const router = useRouter();
@@ -15,6 +16,9 @@ export default function KitchenOrdersScreen() {
   const markOrderServed = useAppStore((state) => state.markOrderServed);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Enable sound notifications for new orders
+  useNewOrderNotification();
 
   // Filter only active orders (not served yet)
   const activeOrders = Array.isArray(orders) 

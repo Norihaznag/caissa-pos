@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Switch, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,8 +12,14 @@ import {
   Database,
   RefreshCw,
   Trash2,
-  Info
+  Info,
+  Volume2
 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { syncPendingItems, checkConnectivity } from '../lib/offline-sync';
+import { loadSoundSettings, saveSoundSettings, SoundSettings } from '../lib/sounds';
+import { loadPrinterConfig, PrinterConfig } from '../lib/printing';
+import { useAppStore } from '../lib/store';
 
 interface SettingItem {
   id: string;
@@ -27,6 +33,8 @@ interface SettingItem {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const clearSyncQueue = useAppStore((state) => state.clearSyncQueue);
+  const setOnlineStatus = useAppStore((state) => state.setOnlineStatus);
   
   const [settings, setSettings] = useState({
     darkMode: false,
@@ -34,40 +42,94 @@ export default function SettingsScreen() {
     autoSync: true,
     offlineMode: false,
   });
+  const [syncing, setSyncing] = useState(false);
+  const [printerConfigured, setPrinterConfigured] = useState(false);
 
-  const toggleSetting = (key: keyof typeof settings) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  // Load settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const soundSettings = await loadSoundSettings();
+        const printerConfig = await loadPrinterConfig();
+        setSettings(prev => ({
+          ...prev,
+          soundNotifications: soundSettings.enabled,
+        }));
+        setPrinterConfigured(printerConfig.enabled && printerConfig.type !== 'none');
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const toggleSetting = async (key: keyof typeof settings) => {
+    const newValue = !settings[key];
+    setSettings(prev => ({ ...prev, [key]: newValue }));
+    
+    // Persist sound settings
+    if (key === 'soundNotifications') {
+      const currentSoundSettings = await loadSoundSettings();
+      await saveSoundSettings({ ...currentSoundSettings, enabled: newValue });
+    }
+    
+    // Handle offline mode
+    if (key === 'offlineMode') {
+      setOnlineStatus(!newValue);
+    }
   };
 
   const handleClearCache = () => {
     Alert.alert(
       'Vider le cache',
-      'Cette action supprimera les données temporaires. Les commandes hors ligne non synchronisées seront conservées.',
+      'Cette action supprimera les données temporaires et la file de synchronisation.',
       [
         { text: 'Annuler', style: 'cancel' },
         { 
           text: 'Confirmer', 
           style: 'destructive',
-          onPress: () => Alert.alert('Cache vidé', 'Le cache a été vidé avec succès.')
+          onPress: async () => {
+            try {
+              clearSyncQueue();
+              await AsyncStorage.removeItem('pos_sync_queue');
+              Alert.alert('Cache vidé', 'Le cache a été vidé avec succès.');
+            } catch (error) {
+              Alert.alert('Erreur', 'Impossible de vider le cache');
+            }
+          }
         },
       ]
     );
   };
 
-  const handleSyncNow = () => {
-    Alert.alert(
-      'Synchronisation',
-      'Synchronisation en cours...',
-      [{ text: 'OK' }]
-    );
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      const isOnline = await checkConnectivity();
+      if (!isOnline) {
+        Alert.alert('Hors ligne', 'Impossible de synchroniser sans connexion internet.');
+        return;
+      }
+      
+      const result = await syncPendingItems();
+      
+      if (result.synced > 0 || result.failed > 0) {
+        Alert.alert(
+          'Synchronisation terminée',
+          `Éléments synchronisés: ${result.synced}\nÉchecs: ${result.failed}`
+        );
+      } else {
+        Alert.alert('Synchronisation', 'Aucun élément en attente de synchronisation.');
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Erreur lors de la synchronisation');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleConfigurePrinter = () => {
-    Alert.alert(
-      'Configuration Imprimante',
-      'Fonctionnalité à venir.\n\nOptions prévues:\n• Imprimante thermique Bluetooth\n• Imprimante réseau (ESC/POS)\n• Imprimante USB',
-      [{ text: 'OK' }]
-    );
+    router.push('/printer-settings');
   };
 
   const settingSections = [
@@ -132,8 +194,8 @@ export default function SettingsScreen() {
         {
           id: 'printer',
           title: 'Configurer l\'imprimante',
-          subtitle: 'Bluetooth, Réseau ou USB',
-          icon: <Printer size={20} color="#6B7280" />,
+          subtitle: printerConfigured ? '✓ Configurée' : 'Bluetooth, Réseau ou USB',
+          icon: <Printer size={20} color={printerConfigured ? "#10B981" : "#6B7280"} />,
           type: 'link' as const,
           onPress: handleConfigurePrinter,
         },

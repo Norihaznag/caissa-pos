@@ -6,6 +6,7 @@ import { ArrowLeft, Printer, Share2, Download, CheckCircle } from 'lucide-react-
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAppStore } from '../lib/store';
+import { loadPrinterConfig, printReceipt, ReceiptData } from '../lib/printing';
 
 interface ReceiptItem {
   name: string;
@@ -138,16 +139,47 @@ export default function ReceiptScreen() {
     }
   };
 
-  const handlePrint = () => {
-    // TODO: Implement ESC/POS printing via Bluetooth or network printer
-    Alert.alert(
-      'Impression',
-      'Fonctionnalité d\'impression à configurer.\n\nOptions disponibles:\n• Imprimante Bluetooth\n• Imprimante réseau\n• Imprimante USB',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Configurer', onPress: () => Alert.alert('Configuration', 'Accédez aux paramètres pour configurer l\'imprimante') }
-      ]
-    );
+  const handlePrint = async () => {
+    try {
+      const config = await loadPrinterConfig();
+      
+      if (!config.enabled || config.type === 'none') {
+        Alert.alert(
+          'Imprimante non configurée',
+          'Voulez-vous configurer une imprimante maintenant?',
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Configurer', onPress: () => router.push('/printer-settings') }
+          ]
+        );
+        return;
+      }
+      
+      const printData: ReceiptData = {
+        restaurantName: receiptData.restaurantName,
+        address: receiptData.address,
+        city: receiptData.city,
+        phone: receiptData.phone,
+        taxId: receiptData.taxId,
+        orderId: receiptData.orderId,
+        tableNumber: receiptData.tableNumber,
+        waiterName: receiptData.waiterName,
+        date: currentDate,
+        items: receiptData.items,
+        subtotal: receiptData.subtotal,
+        discount: receiptData.discount,
+        discountPercent: receiptData.discountPercent,
+        tax: receiptData.tax,
+        total: receiptData.total,
+        paymentMethod: receiptData.paymentMethod,
+        amountReceived: receiptData.amountReceived,
+        change: receiptData.change,
+      };
+      
+      await printReceipt(config, printData);
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible d\'imprimer le reçu');
+    }
   };
 
   return (

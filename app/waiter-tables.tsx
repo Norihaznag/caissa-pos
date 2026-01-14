@@ -9,16 +9,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { LogOut, RefreshCw, CreditCard, ShoppingBag, Check, Table2 } from "lucide-react-native";
+import { LogOut, RefreshCw, CreditCard, ShoppingBag, Check, Table2, Bell } from "lucide-react-native";
 import { useAppStore, Table as TableType, Order } from "../lib/store";
 import { tableService, orderService, orderItemService } from "../lib/services";
 import { TableSkeleton } from "@/components/ui";
 import * as Haptics from "expo-haptics";
+import { useOrderReadyNotification } from "../lib/sounds";
 
 export default function WaiterTablesScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Enable notifications for ready orders
+  useOrderReadyNotification();
   
   // Get data from store
   const tables = useAppStore((state) => state.tables);
