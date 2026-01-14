@@ -4,7 +4,7 @@ import { useAppStore } from './store';
 
 // Real-time subscription for orders (Kitchen view)
 export const useRealtimeOrders = () => {
-  const { orders, setOrders, addOrder, updateOrderStatus } = useAppStore();
+  const { addOrder, updateOrderStatus } = useAppStore();
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export const useRealtimeOrders = () => {
         id: order.id,
         tableId: order.table_id,
         tableNumber: table?.number || 0,
-        items: items.map((item: any) => ({
+        items: (items || []).map((item: any) => ({
           id: item.id,
           productId: item.product_id,
           productName: item.product_name,
@@ -81,6 +81,7 @@ export const useRealtimeOrders = () => {
           quantity: item.quantity,
         })),
         status: order.status,
+        isServed: order.is_served || false,
         totalAmount: order.total_amount,
         createdAt: new Date(order.created_at),
         updatedAt: new Date(order.updated_at),
@@ -96,7 +97,7 @@ export const useRealtimeOrders = () => {
 
 // Real-time subscription for tables status
 export const useRealtimeTables = () => {
-  const { tables, setTables, updateTable } = useAppStore();
+  const { updateTable } = useAppStore();
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
