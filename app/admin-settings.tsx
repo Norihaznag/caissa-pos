@@ -13,7 +13,8 @@ import {
   RefreshCw,
   Trash2,
   Info,
-  Volume2
+  Volume2,
+  Clock
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { syncPendingItems, checkConnectivity } from '../lib/offline-sync';
@@ -51,9 +52,14 @@ export default function SettingsScreen() {
       try {
         const soundSettings = await loadSoundSettings();
         const printerConfig = await loadPrinterConfig();
+        const savedDarkMode = await AsyncStorage.getItem('pos_dark_mode');
+        const savedAutoSync = await AsyncStorage.getItem('pos_auto_sync');
+        
         setSettings(prev => ({
           ...prev,
           soundNotifications: soundSettings.enabled,
+          darkMode: savedDarkMode === 'true',
+          autoSync: savedAutoSync !== 'false', // default true
         }));
         setPrinterConfigured(printerConfig.enabled && printerConfig.type !== 'none');
       } catch (error) {
@@ -64,18 +70,39 @@ export default function SettingsScreen() {
   }, []);
 
   const toggleSetting = async (key: keyof typeof settings) => {
-    const newValue = !settings[key];
-    setSettings(prev => ({ ...prev, [key]: newValue }));
-    
-    // Persist sound settings
-    if (key === 'soundNotifications') {
-      const currentSoundSettings = await loadSoundSettings();
-      await saveSoundSettings({ ...currentSoundSettings, enabled: newValue });
-    }
-    
-    // Handle offline mode
-    if (key === 'offlineMode') {
-      setOnlineStatus(!newValue);
+    try {
+      const newValue = !settings[key];
+      setSettings(prev => ({ ...prev, [key]: newValue }));
+      
+      // Persist sound settings
+      if (key === 'soundNotifications') {
+        const currentSoundSettings = await loadSoundSettings();
+        await saveSoundSettings({ ...currentSoundSettings, enabled: newValue });
+      }
+      
+      // Persist dark mode
+      if (key === 'darkMode') {
+        await AsyncStorage.setItem('pos_dark_mode', String(newValue));
+        Alert.alert(
+          'Mode sombre',
+          newValue 
+            ? 'Le mode sombre sera disponible dans une prochaine mise à jour.' 
+            : 'Mode clair activé.',
+          [{ text: 'OK' }]
+        );
+      }
+      
+      // Persist auto sync
+      if (key === 'autoSync') {
+        await AsyncStorage.setItem('pos_auto_sync', String(newValue));
+      }
+      
+      // Handle offline mode
+      if (key === 'offlineMode') {
+        setOnlineStatus(!newValue);
+      }
+    } catch (error) {
+      console.error('Error toggling setting:', error);
     }
   };
 
@@ -133,6 +160,19 @@ export default function SettingsScreen() {
   };
 
   const settingSections = [
+    {
+      title: 'GESTION',
+      items: [
+        {
+          id: 'shifts',
+          title: 'Gestion des services',
+          subtitle: 'Planning des serveurs',
+          icon: <Clock size={20} color="#3B82F6" />,
+          type: 'link' as const,
+          onPress: () => router.push('/admin-shifts'),
+        },
+      ],
+    },
     {
       title: 'APPARENCE',
       items: [
@@ -245,16 +285,33 @@ export default function SettingsScreen() {
           item.onPress();
         }
       }}
-      className="flex-row items-center justify-between px-4 py-4 bg-white border-b border-gray-100"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+      }}
+      activeOpacity={0.7}
     >
-      <View className="flex-row items-center gap-3 flex-1">
-        <View className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+        <View style={{
+          width: 40,
+          height: 40,
+          borderRadius: 10,
+          backgroundColor: '#F3F4F6',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
           {item.icon}
         </View>
-        <View className="flex-1">
-          <Text className="text-base font-medium text-gray-900">{item.title}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 15, fontWeight: '500', color: '#111827' }}>{item.title}</Text>
           {item.subtitle && (
-            <Text className="text-sm text-gray-500 mt-0.5">{item.subtitle}</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{item.subtitle}</Text>
           )}
         </View>
       </View>
@@ -269,39 +326,52 @@ export default function SettingsScreen() {
       )}
       
       {item.type === 'link' && (
-        <Text className="text-gray-400">›</Text>
+        <Text style={{ color: '#9CA3AF', fontSize: 20, fontWeight: '500' }}>›</Text>
       )}
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F4F6' }}>
       {/* Header */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <View className="flex-row items-center gap-3">
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity
             onPress={() => router.back()}
-            className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg"
+            style={{
+              width: 40,
+              height: 40,
+              backgroundColor: '#F3F4F6',
+              borderRadius: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             <ArrowLeft size={20} color="#374151" />
           </TouchableOpacity>
-          <Text className="text-xl font-bold text-gray-900">Paramètres</Text>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#111827' }}>Paramètres</Text>
         </View>
       </View>
 
-      <ScrollView className="flex-1">
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {settingSections.map((section) => (
-          <View key={section.title} className="mt-6">
-            <Text className="px-4 pb-2 text-xs font-semibold text-gray-500">
+          <View key={section.title} style={{ marginTop: 24 }}>
+            <Text style={{ paddingHorizontal: 16, paddingBottom: 8, fontSize: 12, fontWeight: '600', color: '#6B7280' }}>
               {section.title}
             </Text>
-            <View className="bg-white border-t border-gray-200">
+            <View style={{ backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB' }}>
               {section.items.map(renderSettingItem)}
             </View>
           </View>
         ))}
         
-        <View className="h-8" />
+        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );

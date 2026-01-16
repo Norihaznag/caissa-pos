@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, FlatList, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { RefreshCw, LogOut, Clock, ChefHat, CreditCard, Volume2 } from 'lucide-react-native';
+import { RefreshCw, LogOut, Clock, ChefHat, CreditCard, Volume2, LayoutGrid, List } from 'lucide-react-native';
 import { useAppStore, Order, OrderStatus } from '../lib/store';
 import { orderService, orderItemService, tableService } from '../lib/services';
 import * as Haptics from 'expo-haptics';
@@ -14,18 +14,32 @@ export default function KitchenOrdersScreen() {
   const setOrders = useAppStore((state) => state.setOrders);
   const updateOrderStatus = useAppStore((state) => state.updateOrderStatus);
   const markOrderServed = useAppStore((state) => state.markOrderServed);
+  const logout = useAppStore((state) => state.logout);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | OrderStatus>('ALL');
+  const [orderViewMode, setOrderViewMode] = useState<'list' | 'grid'>('list');
+  const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
+  const isLoadingRef = useRef(false);
 
   // Enable sound notifications for new orders
   useNewOrderNotification();
 
   // Filter only active orders (not served yet)
   const activeOrders = Array.isArray(orders) 
-    ? orders.filter(o => o && !o.isServed && o.status !== 'CANCELLED')
+    ? orders.filter(o => o && o.status && !o.isServed && o.status !== 'CANCELLED')
     : [];
+  
+  // Apply status filter
+  const filteredOrders = statusFilter === 'ALL' 
+    ? activeOrders 
+    : activeOrders.filter(o => o.status === statusFilter);
 
   const loadOrders = useCallback(async () => {
+    // Prevent overlapping requests
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+    
     try {
       setRefreshing(true);
       
@@ -43,18 +57,18 @@ export default function KitchenOrdersScreen() {
             id: o.id,
             tableId: o.table_id,
             tableNumber: table?.number || 0,
-            items: itemsDb.map(i => ({
+            items: Array.isArray(itemsDb) ? itemsDb.map(i => ({
               id: i.id,
               productId: i.product_id,
               productName: i.product_name,
-              price: i.price,
-              quantity: i.quantity,
-            })),
-            status: o.status,
-            isServed: o.is_served,
-            totalAmount: o.total_amount,
-            createdAt: new Date(o.created_at),
-            updatedAt: new Date(o.updated_at),
+              price: i.price || 0,
+              quantity: i.quantity || 0,
+            })) : [],
+            status: o.status || 'NEW',
+            isServed: o.is_served || false,
+            totalAmount: o.total_amount || 0,
+            createdAt: o.created_at ? new Date(o.created_at) : new Date(),
+            updatedAt: o.updated_at ? new Date(o.updated_at) : new Date(),
             waiterId: o.waiter_id || undefined,
           };
         })
@@ -66,6 +80,7 @@ export default function KitchenOrdersScreen() {
     } finally {
       setRefreshing(false);
       setLoading(false);
+      isLoadingRef.current = false;
     }
   }, [setOrders]);
 
@@ -82,6 +97,9 @@ export default function KitchenOrdersScreen() {
   };
 
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    if (updatingOrders.has(orderId)) return; // Prevent double-click
+    
+    setUpdatingOrders(prev => new Set(prev).add(orderId));
     try {
       // Update in Supabase
       await orderService.updateStatus(orderId, newStatus);
@@ -96,6 +114,12 @@ export default function KitchenOrdersScreen() {
       console.error('Error updating status:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Erreur', 'Impossible de mettre à jour le statut');
+    } finally {
+      setUpdatingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     }
   };
 
@@ -126,7 +150,7 @@ export default function KitchenOrdersScreen() {
           text: 'Déconnexion',
           style: 'destructive',
           onPress: () => {
-            // TODO: Clear session from Zustand store
+            logout();
             router.replace('/');
           },
         },
@@ -220,39 +244,30 @@ export default function KitchenOrdersScreen() {
     }
 
     if (order.status === 'READY') {
+      // Kitchen already marked as ready - show waiting indicator
+      // The waiter will pick up the order and serve it
       return (
-        <TouchableOpacity
+        <View
           style={{
-            backgroundColor: '#3B82F6',
+            backgroundColor: '#D1FAE5',
             paddingVertical: 10,
             paddingHorizontal: 16,
             borderRadius: 4,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
           }}
-          onPress={() => handleMarkServed(order.id)}
         >
-          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600', textAlign: 'center' }}>
-            ✓ Servir
+          <Text style={{ color: '#065F46', fontSize: 14, fontWeight: '600', textAlign: 'center' }}>
+            ✓ Prête - En attente serveur
           </Text>
-        </TouchableOpacity>
+        </View>
       );
     }
 
-    // PAID orders still in kitchen (waiting to be served)
-    return (
-      <TouchableOpacity
-        style={{
-          backgroundColor: '#8B5CF6',
-          paddingVertical: 10,
-          paddingHorizontal: 16,
-          borderRadius: 4,
-        }}
-        onPress={() => handleMarkServed(order.id)}
-      >
-        <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600', textAlign: 'center' }}>
-          ✓ Servir (Payée)
-        </Text>
-      </TouchableOpacity>
-    );
+    // For any other status, show nothing
+    return null;
   };
 
   const renderOrderItem = ({ item: order }: { item: Order }) => (
@@ -296,48 +311,53 @@ export default function KitchenOrdersScreen() {
 
       {/* Items List */}
       <View style={{ marginBottom: 12 }}>
-        {(order.items || []).map((item) => (
-          <View
-            key={item.id}
-            style={{
-              paddingVertical: 6,
-              borderBottomWidth: 1,
-              borderBottomColor: '#F3F4F6',
-            }}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                <View
-                  style={{
-                    backgroundColor: '#3B82F6',
-                    width: 24,
-                    height: 24,
-                    borderRadius: 3,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
-                    {item.quantity}
+        {(order.items || []).map((item, index) => {
+          if (!item) return null;
+          const qty = Number(item.quantity) || 0;
+          const price = Number(item.price) || 0;
+          return (
+            <View
+              key={item.id || `order-item-${index}`}
+              style={{
+                paddingVertical: 6,
+                borderBottomWidth: 1,
+                borderBottomColor: '#F3F4F6',
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <View
+                    style={{
+                      backgroundColor: '#3B82F6',
+                      width: 24,
+                      height: 24,
+                      borderRadius: 3,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+                      {qty}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 15, color: '#000000', flex: 1 }}>
+                    {item.productName || 'Article'}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 15, color: '#000000', flex: 1 }}>
-                  {item.productName}
+                <Text style={{ fontSize: 14, color: '#6B7280', fontWeight: '500' }}>
+                  {price} MAD
                 </Text>
               </View>
-              <Text style={{ fontSize: 14, color: '#6B7280', fontWeight: '500' }}>
-                {item.price} MAD
-              </Text>
+              {item.note && (
+                <View style={{ marginLeft: 32, marginTop: 4, backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
+                  <Text style={{ fontSize: 13, color: '#92400E', fontStyle: 'italic' }}>
+                    📝 {item.note}
+                  </Text>
+                </View>
+              )}
             </View>
-            {item.note && (
-              <View style={{ marginLeft: 32, marginTop: 4, backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
-                <Text style={{ fontSize: 13, color: '#92400E', fontStyle: 'italic' }}>
-                  📝 {item.note}
-                </Text>
-              </View>
-            )}
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       {/* Total */}
@@ -380,41 +400,41 @@ export default function KitchenOrdersScreen() {
         }}
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: '#000000' }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: '#000000', flexShrink: 1 }} numberOfLines={1}>
             Cuisine - Commandes
           </Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity 
               onPress={onRefresh}
               style={{
-                width: 44,
-                height: 44,
+                width: 40,
+                height: 40,
                 borderRadius: 8,
                 backgroundColor: '#F3F4F6',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <RefreshCw size={22} color="#3B82F6" />
+              <RefreshCw size={20} color="#3B82F6" />
             </TouchableOpacity>
             <TouchableOpacity 
               onPress={handleLogout}
               style={{
-                width: 44,
-                height: 44,
+                width: 40,
+                height: 40,
                 borderRadius: 8,
                 backgroundColor: '#FEE2E2',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <LogOut size={22} color="#EF4444" />
+              <LogOut size={20} color="#EF4444" />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Summary */}
-        <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
           <Text style={{ fontSize: 13, color: '#6B7280' }}>
             <Text style={{ fontWeight: '700', color: '#EF4444' }}>{newOrders.length}</Text> nouvelles
           </Text>
@@ -425,34 +445,151 @@ export default function KitchenOrdersScreen() {
             <Text style={{ fontWeight: '700', color: '#10B981' }}>{readyOrders.length}</Text> prêtes
           </Text>
         </View>
+
+        {/* Status Filter Tabs */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            {[  
+              { key: 'ALL', label: 'Toutes', count: activeOrders.length },
+              { key: 'NEW', label: 'Nouvelles', count: newOrders.length, color: '#EF4444' },
+              { key: 'PREPARING', label: 'En cours', count: preparingOrders.length, color: '#F59E0B' },
+              { key: 'READY', label: 'Prêtes', count: readyOrders.length, color: '#10B981' },
+            ].map((tab) => (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setStatusFilter(tab.key as typeof statusFilter)}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: statusFilter === tab.key ? (tab.color || '#3B82F6') : '#F3F4F6',
+                }}
+              >
+                <Text style={{ 
+                  fontSize: 13, 
+                  fontWeight: '600', 
+                  color: statusFilter === tab.key ? '#FFFFFF' : '#6B7280' 
+                }}>
+                  {tab.label} ({tab.count})
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {/* Grid/List Toggle */}
+            <View style={{ flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 20, padding: 2, marginLeft: 8 }}>
+              <TouchableOpacity
+                onPress={() => setOrderViewMode('list')}
+                style={{
+                  padding: 6,
+                  borderRadius: 16,
+                  backgroundColor: orderViewMode === 'list' ? '#FFFFFF' : 'transparent',
+                }}
+              >
+                <List size={16} color={orderViewMode === 'list' ? '#3B82F6' : '#9CA3AF'} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setOrderViewMode('grid')}
+                style={{
+                  padding: 6,
+                  borderRadius: 16,
+                  backgroundColor: orderViewMode === 'grid' ? '#FFFFFF' : 'transparent',
+                }}
+              >
+                <LayoutGrid size={16} color={orderViewMode === 'grid' ? '#3B82F6' : '#9CA3AF'} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
       </View>
 
-      {/* Orders List */}
-      <FlatList
-        data={orders}
-        keyExtractor={(item) => item.id}
-        renderItem={renderOrderItem}
-        contentContainerStyle={{ padding: 16 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#3B82F6']}
-            tintColor="#3B82F6"
-          />
-        }
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', paddingVertical: 64, paddingHorizontal: 24 }}>
-            <ChefHat size={64} color="#D1D5DB" />
-            <Text style={{ fontSize: 18, fontWeight: '600', color: '#6B7280', textAlign: 'center', marginTop: 16 }}>
-              Aucune commande
-            </Text>
-            <Text style={{ fontSize: 14, color: '#9CA3AF', textAlign: 'center', marginTop: 8 }}>
-              Les nouvelles commandes apparaîtront ici
-            </Text>
-          </View>
-        }
-      />
+      {/* Orders - List or Grid */}
+      {orderViewMode === 'list' ? (
+        <FlatList
+          data={filteredOrders}
+          keyExtractor={(item) => item.id}
+          renderItem={renderOrderItem}
+          contentContainerStyle={{ padding: 16 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#3B82F6']}
+              tintColor="#3B82F6"
+            />
+          }
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', paddingVertical: 64, paddingHorizontal: 24 }}>
+              <ChefHat size={64} color="#D1D5DB" />
+              <Text style={{ fontSize: 18, fontWeight: '600', color: '#6B7280', textAlign: 'center', marginTop: 16 }}>
+                Aucune commande
+              </Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={filteredOrders}
+          numColumns={2}
+          key="grid"
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 12 }}
+          columnWrapperStyle={{ gap: 12 }}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#3B82F6']}
+              tintColor="#3B82F6"
+            />
+          }
+          renderItem={({ item: order }) => (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={{
+                flex: 1,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 2,
+                borderColor: getStatusColor(order.status),
+              }}
+            >
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#000000' }}>T{order.tableNumber}</Text>
+                <View style={{ backgroundColor: getStatusColor(order.status), paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
+                    {order.status === 'NEW' ? 'NEW' : order.status === 'PREPARING' ? 'PREP' : 'OK'}
+                  </Text>
+                </View>
+              </View>
+              {/* Items count */}
+              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>
+                {order.items?.length || 0} articles • {getTimeSince(order.createdAt)}
+              </Text>
+              {/* Quick items preview */}
+              {(order.items || []).slice(0, 2).map((item, idx) => (
+                <Text key={idx} style={{ fontSize: 12, color: '#374151' }} numberOfLines={1}>
+                  {item.quantity}x {item.productName}
+                </Text>
+              ))}
+              {(order.items?.length || 0) > 2 && (
+                <Text style={{ fontSize: 11, color: '#9CA3AF', fontStyle: 'italic' }}>+{(order.items?.length || 0) - 2} autres</Text>
+              )}
+              {/* Action */}
+              <View style={{ marginTop: 10 }}>
+                {renderStatusButtons(order)}
+              </View>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', paddingVertical: 64 }}>
+              <ChefHat size={64} color="#D1D5DB" />
+              <Text style={{ fontSize: 18, fontWeight: '600', color: '#6B7280', marginTop: 16 }}>Aucune commande</Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }

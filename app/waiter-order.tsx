@@ -1,11 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, FlatList, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, FlatList, Alert, TextInput, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, ShoppingCart, Plus, Minus, Trash2, CreditCard, MessageSquare, Search, X } from 'lucide-react-native';
+import { ArrowLeft, ShoppingCart, Plus, Minus, Trash2, CreditCard, MessageSquare, Search, X, LayoutGrid, List, Package } from 'lucide-react-native';
 import { useAppStore, Order, OrderItem } from '../lib/store';
 import { categoryService, productService, orderService, orderItemService, tableService } from '../lib/services';
 import * as Haptics from 'expo-haptics';
+
+// Quick cancellation reasons
+const CANCEL_REASONS = [
+  { id: 'client_changed_mind', label: 'Client a changé d\'avis', icon: '🔄' },
+  { id: 'too_long_wait', label: 'Attente trop longue', icon: '⏰' },
+  { id: 'wrong_order', label: 'Erreur de commande', icon: '❌' },
+  { id: 'out_of_stock', label: 'Produit indisponible', icon: '📦' },
+  { id: 'client_left', label: 'Client parti', icon: '🚪' },
+  { id: 'duplicate_order', label: 'Commande en double', icon: '📋' },
+];
 
 type CartItem = {
   productId: string;
@@ -15,12 +25,15 @@ type CartItem = {
   note?: string;
 };
 
+type ProductViewMode = 'list' | 'grid';
+
 export default function WaiterOrderScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const tableNumber = params.tableNumber ? Number(params.tableNumber) : 1;
-  const tableId = params.tableId as string;
-  const orderId = params.orderId as string | undefined;
+  const tableNumber = params.tableNumber ? Number(Array.isArray(params.tableNumber) ? params.tableNumber[0] : params.tableNumber) : 1;
+  const tableId = Array.isArray(params.tableId) ? params.tableId[0] : params.tableId;
+  const orderId = Array.isArray(params.orderId) ? params.orderId[0] : params.orderId as string | undefined;
+  const showCancelOnMount = params.showCancel === 'true';
 
   // Get from store
   const categories = useAppStore((state) => state.categories);
@@ -32,17 +45,24 @@ export default function WaiterOrderScreen() {
   const orders = useAppStore((state) => state.orders);
   const setCategories = useAppStore((state) => state.setCategories);
   const setProducts = useAppStore((state) => state.setProducts);
+  const cancelOrderAndFreeTable = useAppStore((state) => state.cancelOrderAndFreeTable);
 
-  const [selectedCategory, setSelectedCategory] = useState<string>(categories[0]?.id || '1');
+  const [selectedCategory, setSelectedCategory] = useState<string>((Array.isArray(categories) && categories[0]?.id) || '1');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [editingNoteFor, setEditingNoteFor] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [productViewMode, setProductViewMode] = useState<ProductViewMode>('list');
   const [loading, setLoading] = useState(true);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [customReason, setCustomReason] = useState('');
+  const [sending, setSending] = useState(false);
 
   // Load data from Supabase
   const loadData = useCallback(async () => {
+    if (!tableId) return; // Skip if no tableId
     try {
       setLoading(true);
       
@@ -67,6 +87,7 @@ export default function WaiterOrderScreen() {
         price: p.price,
         categoryId: p.category_id,
         isActive: p.is_active,
+        imageUrl: p.image_url,
       }));
       setProducts(productsData);
       
@@ -92,11 +113,18 @@ export default function WaiterOrderScreen() {
     } finally {
       setLoading(false);
     }
-  }, [orderId, setCategories, setProducts]);
+  }, [orderId, setCategories, setProducts, tableId]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Show cancel modal if coming from tables with showCancel param
+  useEffect(() => {
+    if (showCancelOnMount && orderId) {
+      setShowCancelModal(true);
+    }
+  }, [showCancelOnMount, orderId]);
 
   // Filter products by selected category and search
   const filteredProducts = Array.isArray(products) 
@@ -193,11 +221,13 @@ export default function WaiterOrderScreen() {
 
   // Send order to kitchen
   const sendToKitchen = async () => {
+    if (sending) return; // Prevent double-submission
     if (cart.length === 0) {
       Alert.alert('Panier Vide', 'Ajoutez des produits avant d\'envoyer.');
       return;
     }
 
+    setSending(true);
     try {
       if (orderId) {
         // Edit existing order - update items in Supabase
@@ -214,11 +244,13 @@ export default function WaiterOrderScreen() {
           product_name: item.productName,
           price: item.price,
           quantity: item.quantity,
+          note: item.note || undefined,
         }));
         await orderItemService.createMany(orderItems);
         
-        // Update order total
+        // Update order status and total in Supabase
         await orderService.updateStatus(orderId, 'NEW');
+        await orderService.update(orderId, { total_amount: total });
         
         // Update local store
         const storeItems: OrderItem[] = cart.map((item, index) => ({
@@ -257,6 +289,7 @@ export default function WaiterOrderScreen() {
           product_name: item.productName,
           price: item.price,
           quantity: item.quantity,
+          note: item.note || undefined,
         }));
         await orderItemService.createMany(orderItems);
         
@@ -281,8 +314,8 @@ export default function WaiterOrderScreen() {
           status: 'NEW',
           isServed: false,
           totalAmount: total,
-          createdAt: new Date(newOrderDb.created_at),
-          updatedAt: new Date(newOrderDb.updated_at),
+          createdAt: newOrderDb.created_at ? new Date(newOrderDb.created_at) : new Date(),
+          updatedAt: newOrderDb.updated_at ? new Date(newOrderDb.updated_at) : new Date(),
           waiterId: user?.id,
           waiterName: user?.name || 'Serveur',
         };
@@ -308,6 +341,8 @@ export default function WaiterOrderScreen() {
       console.error('Error saving order:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Erreur', 'Impossible d\'enregistrer la commande. Vérifiez votre connexion.');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -317,10 +352,101 @@ export default function WaiterOrderScreen() {
       Alert.alert('Panier Vide', 'Ajoutez des produits avant de procéder au paiement.');
       return;
     }
-    router.push({
-      pathname: '/waiter-payment',
-      params: { tableNumber, orderId: `ORD-${Date.now()}` }
-    });
+    
+    // If editing an existing order, use that orderId
+    if (orderId) {
+      router.push({
+        pathname: '/waiter-payment',
+        params: { tableNumber, tableId, orderId }
+      });
+    } else {
+      // For new orders, need to send to kitchen first to create the order
+      Alert.alert(
+        'Envoyer à la cuisine',
+        'Vous devez d\'abord envoyer la commande en cuisine avant de procéder au paiement.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { 
+            text: 'Envoyer', 
+            onPress: async () => {
+              await sendToKitchen();
+            }
+          }
+        ]
+      );
+    }
+  };
+
+  // Cancel the current order
+  const cancelOrder = () => {
+    if (!orderId) {
+      // Just clearing cart for new orders
+      if (cart.length === 0) {
+        router.back();
+        return;
+      }
+      Alert.alert(
+        'Annuler la commande?',
+        'Voulez-vous vraiment annuler et vider le panier?',
+        [
+          { text: 'Non', style: 'cancel' },
+          {
+            text: 'Oui, Annuler',
+            style: 'destructive',
+            onPress: () => {
+              setCart([]);
+              router.back();
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    // For existing orders - show reason modal
+    setCancelReason('');
+    setCustomReason('');
+    setShowCancelModal(true);
+  };
+
+  // Confirm cancellation with reason
+  const confirmCancellation = async () => {
+    if (!orderId) {
+      Alert.alert('Erreur', 'ID de commande manquant');
+      setShowCancelModal(false);
+      return;
+    }
+    
+    const finalReason = cancelReason === 'custom' ? customReason : 
+      CANCEL_REASONS.find(r => r.id === cancelReason)?.label || cancelReason;
+    
+    if (!finalReason.trim()) {
+      Alert.alert('Raison requise', 'Veuillez sélectionner ou saisir une raison d\'annulation.');
+      return;
+    }
+
+    try {
+      // Update order status in Supabase with reason
+      await orderService.cancelOrder(orderId, finalReason);
+      
+      // Free the table in Supabase
+      await tableService.setOpen(tableId);
+      
+      // Update local store
+      cancelOrderAndFreeTable(orderId, tableId, finalReason);
+      
+      setShowCancelModal(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        'Commande Annulée',
+        `La commande de la Table ${tableNumber} a été annulée.\n\nRaison: ${finalReason}`,
+        [{ text: 'OK', onPress: () => router.replace('/waiter-tables') }]
+      );
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Erreur', 'Impossible d\'annuler la commande. Réessayez.');
+    }
   };
 
   // Get quantity for a product in cart
@@ -329,41 +455,113 @@ export default function WaiterOrderScreen() {
     return item ? item.quantity : 0;
   };
 
+  // Show error if tableId is missing (after all hooks)
+  if (!tableId) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#EF4444', fontSize: 16, marginBottom: 16 }}>ID de table manquant</Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ padding: 12, backgroundColor: '#3B82F6', borderRadius: 8 }}>
+          <Text style={{ color: '#FFFFFF' }}>Retour</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       {/* Header */}
-      <View className="border-b border-gray-300">
-        <View className="flex-row items-center justify-between px-4 py-3">
-          <View className="flex-row items-center gap-3">
-            <TouchableOpacity onPress={() => router.back()}>
-              <ArrowLeft color="#000" size={24} />
+      <View style={{ borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <TouchableOpacity 
+              onPress={() => router.back()}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                backgroundColor: '#F3F4F6',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <ArrowLeft color="#374151" size={20} />
             </TouchableOpacity>
-            <Text className="text-xl font-bold text-black">
-              Table {tableNumber}
-            </Text>
+            <View>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>
+                Table {tableNumber}
+              </Text>
+              {orderId && (
+                <Text style={{ fontSize: 13, color: '#6B7280' }}>Modifier commande</Text>
+              )}
+            </View>
           </View>
-          <TouchableOpacity
-            onPress={() => setShowCart(!showCart)}
-            className="relative"
-          >
-            <ShoppingCart color="#3B82F6" size={24} />
-            {cartItemCount > 0 && (
-              <View className="absolute -top-2 -right-2 bg-red-500 rounded-full w-5 h-5 items-center justify-center">
-                <Text className="text-white text-xs font-bold">{cartItemCount}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {/* Cancel Order Button */}
+            <TouchableOpacity
+              onPress={cancelOrder}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                backgroundColor: '#FEE2E2',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <X color="#EF4444" size={22} />
+            </TouchableOpacity>
+            {/* Cart Toggle Button */}
+            <TouchableOpacity
+              onPress={() => setShowCart(!showCart)}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                backgroundColor: showCart ? '#3B82F6' : '#EFF6FF',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <ShoppingCart color={showCart ? '#FFFFFF' : '#3B82F6'} size={22} />
+              {cartItemCount > 0 && (
+                <View style={{
+                position: 'absolute',
+                top: -6,
+                right: -6,
+                backgroundColor: '#EF4444',
+                borderRadius: 10,
+                minWidth: 20,
+                height: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 4,
+              }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{cartItemCount}</Text>
               </View>
             )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Search Bar */}
-        <View className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-          <View className="flex-row items-center bg-white border border-gray-200 rounded-lg px-3 py-2">
+        {/* Search Bar + View Toggle */}
+        <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#F9FAFB', flexDirection: 'row', gap: 8 }}>
+          <View style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#FFFFFF',
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            borderRadius: 10,
+            paddingHorizontal: 12,
+            height: 44,
+          }}>
             <Search size={18} color="#9CA3AF" />
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholder="Rechercher un produit..."
-              className="flex-1 ml-2 text-gray-900"
+              style={{ flex: 1, marginLeft: 8, fontSize: 15, color: '#111827' }}
               placeholderTextColor="#9CA3AF"
             />
             {searchQuery.length > 0 && (
@@ -372,6 +570,29 @@ export default function WaiterOrderScreen() {
               </TouchableOpacity>
             )}
           </View>
+          {/* Grid/List Toggle */}
+          <View style={{ flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', padding: 2 }}>
+            <TouchableOpacity
+              onPress={() => setProductViewMode('list')}
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                backgroundColor: productViewMode === 'list' ? '#EFF6FF' : 'transparent',
+              }}
+            >
+              <List size={20} color={productViewMode === 'list' ? '#3B82F6' : '#9CA3AF'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setProductViewMode('grid')}
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                backgroundColor: productViewMode === 'grid' ? '#EFF6FF' : 'transparent',
+              }}
+            >
+              <LayoutGrid size={20} color={productViewMode === 'grid' ? '#3B82F6' : '#9CA3AF'} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Category Tabs */}
@@ -379,25 +600,30 @@ export default function WaiterOrderScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            className="border-t border-gray-300"
+            style={{ backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB' }}
+            contentContainerStyle={{ paddingHorizontal: 12 }}
           >
             {categories.map((category) => (
               <TouchableOpacity
                 key={category.id}
                 onPress={() => setSelectedCategory(category.id)}
-                className={`px-4 py-3 border-r border-gray-300 ${
-                  selectedCategory === category.id ? 'bg-blue-50' : ''
-                }`}
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  backgroundColor: selectedCategory === category.id ? '#EFF6FF' : 'transparent',
+                  borderBottomWidth: 2,
+                  borderBottomColor: selectedCategory === category.id ? '#3B82F6' : 'transparent',
+                }}
               >
-              <Text
-                className={`text-base ${
-                  selectedCategory === category.id
-                    ? 'text-blue-600 font-bold'
-                    : 'text-gray-700'
-                }`}
-              >
-                {category.name}
-              </Text>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: selectedCategory === category.id ? '600' : '500',
+                    color: selectedCategory === category.id ? '#3B82F6' : '#6B7280',
+                  }}
+                >
+                  {category.name}
+                </Text>
             </TouchableOpacity>
           ))}
           </ScrollView>
@@ -406,45 +632,172 @@ export default function WaiterOrderScreen() {
 
       {/* Main Content */}
       {!showCart ? (
-        // Product List
-        <FlatList
-          data={filteredProducts}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          renderItem={({ item }) => {
-            const quantity = getProductQuantity(item.id);
-            return (
-              <TouchableOpacity
-                onPress={() => addToCart(item.id, item.name, item.price)}
-                className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200"
-              >
-                <View className="flex-1">
-                  <Text className="text-base text-black font-medium">
+        // Product List or Grid
+        productViewMode === 'list' ? (
+          <FlatList
+            data={filteredProducts}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingBottom: 16, flexGrow: 1 }}
+            renderItem={({ item }) => {
+              const quantity = getProductQuantity(item.id);
+              return (
+                <TouchableOpacity
+                  onPress={() => addToCart(item.id, item.name, item.price)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    backgroundColor: '#FFFFFF',
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#F3F4F6',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  {/* Product Image */}
+                  {item.imageUrl ? (
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 8,
+                        backgroundColor: '#F3F4F6',
+                        marginRight: 12,
+                      }}
+                    />
+                  ) : (
+                    <View style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 8,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                    }}>
+                      <Package size={20} color="#D1D5DB" />
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, color: '#111827', fontWeight: '500' }}>
+                      {item.name}
+                    </Text>
+                    <Text style={{ fontSize: 16, color: '#3B82F6', fontWeight: '700', marginTop: 4 }}>
+                      {item.price} MAD
+                    </Text>
+                  </View>
+                  {quantity > 0 && (
+                    <View style={{
+                      backgroundColor: '#EFF6FF',
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: '#DBEAFE',
+                    }}>
+                      <Text style={{ color: '#3B82F6', fontWeight: '700', fontSize: 14 }}>x{quantity}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
+                <Text style={{ fontSize: 16, color: '#9CA3AF' }}>Aucun produit trouvé</Text>
+              </View>
+            }
+          />
+        ) : (
+          <FlatList
+            data={filteredProducts}
+            numColumns={2}
+            key="grid"
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 12, flexGrow: 1 }}
+            columnWrapperStyle={{ gap: 10 }}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            renderItem={({ item }) => {
+              const quantity = getProductQuantity(item.id);
+              return (
+                <TouchableOpacity
+                  onPress={() => addToCart(item.id, item.name, item.price)}
+                  activeOpacity={0.7}
+                  style={{
+                    flex: 1,
+                    backgroundColor: quantity > 0 ? '#EFF6FF' : '#FFFFFF',
+                    borderRadius: 12,
+                    padding: 10,
+                    borderWidth: quantity > 0 ? 2 : 1,
+                    borderColor: quantity > 0 ? '#3B82F6' : '#E5E7EB',
+                    minHeight: 140,
+                  }}
+                >
+                  {/* Product Image */}
+                  {item.imageUrl ? (
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={{
+                        width: '100%',
+                        height: 60,
+                        borderRadius: 8,
+                        backgroundColor: '#F3F4F6',
+                        marginBottom: 6,
+                      }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={{
+                      width: '100%',
+                      height: 60,
+                      borderRadius: 8,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 6,
+                    }}>
+                      <Package size={24} color="#D1D5DB" />
+                    </View>
+                  )}
+                  <Text style={{ fontSize: 13, fontWeight: '500', color: '#111827', lineHeight: 18 }} numberOfLines={2}>
                     {item.name}
                   </Text>
-                  <Text className="text-lg text-blue-600 font-bold mt-1">
-                    {item.price} MAD
-                  </Text>
-                </View>
-                {quantity > 0 && (
-                  <View className="bg-blue-50 px-3 py-1 rounded">
-                    <Text className="text-blue-600 font-bold">x{quantity}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#3B82F6' }}>
+                      {item.price} MAD
+                    </Text>
+                    {quantity > 0 && (
+                      <View style={{ 
+                        backgroundColor: '#3B82F6', 
+                        paddingHorizontal: 6, 
+                        paddingVertical: 3, 
+                        borderRadius: 6 
+                      }}>
+                        <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>x{quantity}</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </TouchableOpacity>
-            );
-          }}
-        />
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
+                <Text style={{ fontSize: 16, color: '#9CA3AF' }}>Aucun produit trouvé</Text>
+              </View>
+            }
+          />
+        )
       ) : (
         // Cart View
-        <View className="flex-1">
+        <View style={{ flex: 1 }}>
           {cart.length === 0 ? (
-            <View className="flex-1 items-center justify-center px-6">
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
               <ShoppingCart color="#D1D5DB" size={64} />
-              <Text className="text-gray-500 text-lg mt-4 text-center">
+              <Text style={{ fontSize: 18, color: '#6B7280', fontWeight: '600', marginTop: 16, textAlign: 'center' }}>
                 Panier Vide
               </Text>
-              <Text className="text-gray-400 text-center mt-2">
+              <Text style={{ fontSize: 14, color: '#9CA3AF', textAlign: 'center', marginTop: 8 }}>
                 Ajoutez des produits pour commencer
               </Text>
             </View>
@@ -453,53 +806,86 @@ export default function WaiterOrderScreen() {
               <FlatList
                 data={cart}
                 keyExtractor={(item) => item.productId}
-                contentContainerStyle={{ paddingBottom: 120 }}
+                contentContainerStyle={{ paddingBottom: 16 }}
                 renderItem={({ item }) => (
-                  <View className="px-4 py-4 border-b border-gray-200">
-                    <View className="flex-row items-start justify-between mb-2">
-                      <Text className="text-base text-black font-medium flex-1">
+                  <View style={{ paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ flex: 1, fontSize: 15, color: '#111827', fontWeight: '500' }}>
                         {item.productName}
                       </Text>
-                      <View className="flex-row gap-2">
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
                         <TouchableOpacity
                           onPress={() => openNoteEditor(item.productId, item.note || '')}
-                          className={`${item.note ? 'bg-yellow-100' : 'bg-gray-100'} p-1 rounded`}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 6,
+                            backgroundColor: item.note ? '#FEF3C7' : '#F3F4F6',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
                         >
-                          <MessageSquare color={item.note ? '#CA8A04' : '#6B7280'} size={18} />
+                          <MessageSquare color={item.note ? '#CA8A04' : '#6B7280'} size={16} />
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => removeFromCart(item.productId)}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 6,
+                            backgroundColor: '#FEE2E2',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
                         >
-                          <Trash2 color="#EF4444" size={20} />
+                          <Trash2 color="#EF4444" size={16} />
                         </TouchableOpacity>
                       </View>
                     </View>
                     {item.note && (
-                      <View className="bg-yellow-50 px-2 py-1 rounded mb-2">
-                        <Text className="text-sm text-yellow-700">
+                      <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, marginBottom: 10 }}>
+                        <Text style={{ fontSize: 13, color: '#92400E' }}>
                           📝 {item.note}
                         </Text>
                       </View>
                     )}
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center gap-3">
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         <TouchableOpacity
                           onPress={() => updateQuantity(item.productId, -1)}
-                          className="w-8 h-8 border border-gray-300 items-center justify-center rounded"
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderWidth: 1,
+                            borderColor: '#E5E7EB',
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#FFFFFF',
+                          }}
                         >
-                          <Minus color="#000" size={16} />
+                          <Minus color="#374151" size={16} />
                         </TouchableOpacity>
-                        <Text className="text-lg font-bold text-black min-w-[30px] text-center">
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', minWidth: 30, textAlign: 'center' }}>
                           {item.quantity}
                         </Text>
                         <TouchableOpacity
                           onPress={() => updateQuantity(item.productId, 1)}
-                          className="w-8 h-8 border border-gray-300 items-center justify-center rounded"
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderWidth: 1,
+                            borderColor: '#E5E7EB',
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#FFFFFF',
+                          }}
                         >
-                          <Plus color="#000" size={16} />
+                          <Plus color="#374151" size={16} />
                         </TouchableOpacity>
                       </View>
-                      <Text className="text-lg text-blue-600 font-bold">
+                      <Text style={{ fontSize: 17, color: '#3B82F6', fontWeight: '700' }}>
                         {item.price * item.quantity} MAD
                       </Text>
                     </View>
@@ -513,26 +899,54 @@ export default function WaiterOrderScreen() {
 
       {/* Bottom Bar */}
       {cart.length > 0 && (
-        <View className="absolute bottom-0 left-0 right-0 bg-white border-t-2 border-gray-300 px-4 py-4">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-lg text-gray-700 font-medium">Total</Text>
-            <Text className="text-2xl text-blue-600 font-bold">{total} MAD</Text>
+        <View style={{
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#E5E7EB',
+          paddingHorizontal: 16,
+          paddingVertical: 16,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 8,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <Text style={{ fontSize: 16, color: '#6B7280', fontWeight: '500' }}>Total</Text>
+            <Text style={{ fontSize: 24, color: '#3B82F6', fontWeight: '700' }}>{total} MAD</Text>
           </View>
-          <View className="flex-row gap-3">
+          <View style={{ flexDirection: 'row', gap: 12 }}>
             <TouchableOpacity
               onPress={sendToKitchen}
-              className="flex-1 bg-blue-600 py-4 rounded items-center"
+              style={{
+                flex: 1,
+                backgroundColor: '#3B82F6',
+                paddingVertical: 14,
+                borderRadius: 10,
+                alignItems: 'center',
+              }}
+              activeOpacity={0.8}
             >
-              <Text className="text-white text-base font-bold">
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
                 Envoyer Cuisine
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={goToPayment}
-              className="flex-1 bg-green-500 py-4 rounded items-center flex-row justify-center gap-2"
+              style={{
+                flex: 1,
+                backgroundColor: '#22C55E',
+                paddingVertical: 14,
+                borderRadius: 10,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+              activeOpacity={0.8}
             >
-              <CreditCard size={20} color="#FFFFFF" />
-              <Text className="text-white text-base font-bold">
+              <CreditCard size={18} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
                 Payer
               </Text>
             </TouchableOpacity>
@@ -542,9 +956,30 @@ export default function WaiterOrderScreen() {
 
       {/* Note Editor Modal */}
       {editingNoteFor && (
-        <View className="absolute inset-0 bg-black/50 items-center justify-center px-4">
-          <View className="bg-white rounded-lg w-full max-w-sm p-4">
-            <Text className="text-lg font-bold text-gray-900 mb-3">
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 24,
+        }}>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 360,
+            padding: 20,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 16,
+            elevation: 10,
+          }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 16 }}>
               Note pour la cuisine
             </Text>
             <TextInput
@@ -553,29 +988,176 @@ export default function WaiterOrderScreen() {
               placeholder="Ex: Sans sucre, bien cuit, allergies..."
               multiline
               numberOfLines={3}
-              className="border border-gray-300 rounded-lg p-3 text-gray-900 min-h-[80px]"
+              style={{
+                borderWidth: 1,
+                borderColor: '#E5E7EB',
+                borderRadius: 10,
+                padding: 12,
+                fontSize: 15,
+                color: '#111827',
+                minHeight: 90,
+                backgroundColor: '#F9FAFB',
+              }}
+              placeholderTextColor="#9CA3AF"
               textAlignVertical="top"
             />
-            <View className="flex-row gap-3 mt-4">
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
               <TouchableOpacity
                 onPress={() => {
                   setEditingNoteFor(null);
                   setNoteText('');
                 }}
-                className="flex-1 py-3 bg-gray-200 rounded-lg"
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  backgroundColor: '#F3F4F6',
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
               >
-                <Text className="text-center font-semibold text-gray-700">Annuler</Text>
+                <Text style={{ fontWeight: '600', color: '#6B7280', fontSize: 15 }}>Annuler</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={saveNote}
-                className="flex-1 py-3 bg-blue-500 rounded-lg"
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  backgroundColor: '#3B82F6',
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
               >
-                <Text className="text-center font-semibold text-white">Enregistrer</Text>
+                <Text style={{ fontWeight: '600', color: '#FFFFFF', fontSize: 15 }}>Enregistrer</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       )}
+
+      {/* Cancel Order Modal */}
+      <Modal
+        visible={showCancelModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCancelModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '80%' }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>
+                Annuler la commande
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowCancelModal(false)}
+                style={{ padding: 8 }}
+              >
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 14, color: '#6B7280', marginBottom: 16 }}>
+              Table {tableNumber} • Sélectionnez une raison d'annulation
+            </Text>
+
+            {/* Quick Reasons */}
+            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+              {CANCEL_REASONS.map((reason) => (
+                <TouchableOpacity
+                  key={reason.id}
+                  onPress={() => {
+                    setCancelReason(reason.id);
+                    setCustomReason('');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 14,
+                    backgroundColor: cancelReason === reason.id ? '#FEE2E2' : '#F9FAFB',
+                    borderRadius: 10,
+                    marginBottom: 8,
+                    borderWidth: 2,
+                    borderColor: cancelReason === reason.id ? '#EF4444' : 'transparent',
+                  }}
+                >
+                  <Text style={{ fontSize: 20, marginRight: 12 }}>{reason.icon}</Text>
+                  <Text style={{ fontSize: 15, color: cancelReason === reason.id ? '#B91C1C' : '#374151', fontWeight: cancelReason === reason.id ? '600' : '400' }}>
+                    {reason.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+
+              {/* Custom Reason */}
+              <TouchableOpacity
+                onPress={() => setCancelReason('custom')}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 14,
+                  backgroundColor: cancelReason === 'custom' ? '#FEE2E2' : '#F9FAFB',
+                  borderRadius: 10,
+                  marginBottom: 8,
+                  borderWidth: 2,
+                  borderColor: cancelReason === 'custom' ? '#EF4444' : 'transparent',
+                }}
+              >
+                <Text style={{ fontSize: 20, marginRight: 12 }}>✏️</Text>
+                <Text style={{ fontSize: 15, color: cancelReason === 'custom' ? '#B91C1C' : '#374151', fontWeight: cancelReason === 'custom' ? '600' : '400' }}>
+                  Autre raison...
+                </Text>
+              </TouchableOpacity>
+
+              {cancelReason === 'custom' && (
+                <TextInput
+                  value={customReason}
+                  onChangeText={setCustomReason}
+                  placeholder="Saisir la raison..."
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#E5E7EB',
+                    borderRadius: 10,
+                    padding: 12,
+                    fontSize: 15,
+                    color: '#111827',
+                    backgroundColor: '#FFFFFF',
+                    marginBottom: 8,
+                  }}
+                  placeholderTextColor="#9CA3AF"
+                  autoFocus
+                />
+              )}
+            </ScrollView>
+
+            {/* Action Buttons */}
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#E5E7EB' }}>
+              <TouchableOpacity
+                onPress={() => setShowCancelModal(false)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  backgroundColor: '#F3F4F6',
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontWeight: '600', color: '#6B7280', fontSize: 15 }}>Retour</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmCancellation}
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  backgroundColor: '#EF4444',
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontWeight: '600', color: '#FFFFFF', fontSize: 15 }}>Confirmer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

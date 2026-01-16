@@ -1,0 +1,6 @@
+<StackPanel Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <TextBlock Text="Welcome to My React Native Windows App!" 
+               FontSize="24" 
+               HorizontalAlignment="Center" 
+               VerticalAlignment="Center" />
+</StackPanel>

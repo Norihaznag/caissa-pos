@@ -1,5 +1,8 @@
 import { supabase, DbUser, DbCategory, DbProduct, DbTable, DbOrder, DbOrderItem } from './supabase';
 
+// Re-export types for convenience
+export type { DbUser, DbCategory, DbProduct, DbTable, DbOrder, DbOrderItem };
+
 // ============================================================================
 // USER SERVICE
 // ============================================================================
@@ -169,6 +172,67 @@ export const productService = {
 };
 
 // ============================================================================
+// IMAGE UPLOAD SERVICE
+// ============================================================================
+
+export const imageService = {
+  async uploadProductImage(uri: string, productId: string): Promise<string | null> {
+    try {
+      // Get the file extension
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${productId}-${Date.now()}.${fileExt}`;
+      const filePath = `products/${fileName}`;
+
+      // Read the file as blob
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      // Convert blob to array buffer
+      const arrayBuffer = await new Response(blob).arrayBuffer();
+
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, arrayBuffer, {
+          contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+          upsert: true,
+        });
+
+      if (error) {
+        console.error('Upload error:', error);
+        return null;
+      }
+
+      // Get the public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+
+      return publicUrlData.publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      return null;
+    }
+  },
+
+  async deleteProductImage(imageUrl: string): Promise<void> {
+    try {
+      // Extract the file path from the URL
+      const urlParts = imageUrl.split('/product-images/');
+      if (urlParts.length < 2) return;
+      
+      const filePath = urlParts[1];
+      
+      await supabase.storage
+        .from('product-images')
+        .remove([filePath]);
+    } catch (error) {
+      console.error('Error deleting image:', error);
+    }
+  },
+};
+
+// ============================================================================
 // TABLE SERVICE
 // ============================================================================
 
@@ -264,12 +328,12 @@ export const orderService = {
   },
 
   async getPending(): Promise<DbOrder[]> {
-    // Kitchen sees all orders that haven't been served yet (regardless of payment)
+    // Waiter sees all orders that haven't been paid or cancelled
+    // This includes NEW, PREPARING, READY orders (even if served)
     const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .eq('is_served', false)
-      .neq('status', 'CANCELLED')
+      .in('status', ['NEW', 'PREPARING', 'READY'])
       .order('created_at', { ascending: true });
     
     if (error) throw error;
@@ -323,10 +387,39 @@ export const orderService = {
     return data;
   },
 
+  async cancelOrder(id: string, reason?: string): Promise<DbOrder> {
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ 
+        status: 'CANCELLED', 
+        cancellation_reason: reason,
+        cancelled_at: new Date().toISOString(),
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
   async markServed(id: string): Promise<DbOrder> {
     const { data, error } = await supabase
       .from('orders')
       .update({ is_served: true, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, updates: Partial<Omit<DbOrder, 'id' | 'created_at'>>): Promise<DbOrder> {
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
@@ -412,17 +505,95 @@ export const reportsService = {
       .select('*')
       .gte('created_at', startOfDay.toISOString())
       .lte('created_at', endOfDay.toISOString())
-      .in('status', ['PAID', 'READY']);
+      .in('status', ['PAID', 'READY', 'NEW', 'PREPARING']); // All non-cancelled orders for stats
     
     if (error) throw error;
     
     const orders = data || [];
-    const totalRevenue = orders.reduce((sum, order) => sum + order.total_amount, 0);
+    // Only count PAID orders for revenue
+    const paidOrders = orders.filter(o => o.status === 'PAID');
+    const totalRevenue = paidOrders.reduce((sum, order) => sum + order.total_amount, 0);
     
     return {
       totalOrders: orders.length,
       totalRevenue,
       orders,
+    };
+  },
+
+  // End of day cash report with payment breakdown
+  async getEndOfDayReport(date: Date = new Date()): Promise<{
+    totalOrders: number;
+    paidOrders: number;
+    cancelledOrders: number;
+    totalRevenue: number;
+    cashRevenue: number;
+    cardRevenue: number;
+    totalDiscounts: number;
+    avgOrderValue: number;
+    topProducts: Array<{ name: string; quantity: number; revenue: number }>;
+  }> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Get all orders for the day
+    const { data: ordersData, error: ordersError } = await supabase
+      .from('orders')
+      .select('*')
+      .gte('created_at', startOfDay.toISOString())
+      .lte('created_at', endOfDay.toISOString());
+    
+    if (ordersError) throw ordersError;
+    
+    const orders = ordersData || [];
+    const paidOrders = orders.filter(o => o.status === 'PAID');
+    const cancelledOrders = orders.filter(o => o.status === 'CANCELLED');
+    
+    // Calculate revenue by payment method
+    const cashOrders = paidOrders.filter(o => o.payment_method === 'cash');
+    const cardOrders = paidOrders.filter(o => o.payment_method === 'card');
+    
+    const totalRevenue = paidOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+    const cashRevenue = cashOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+    const cardRevenue = cardOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+    const totalDiscounts = paidOrders.reduce((sum, o) => sum + (o.discount || 0), 0);
+    
+    // Get top products
+    const paidOrderIds = paidOrders.map(o => o.id);
+    const { data: itemsData } = await supabase
+      .from('order_items')
+      .select('product_name, quantity, price')
+      .in('order_id', paidOrderIds.length > 0 ? paidOrderIds : ['none']);
+    
+    const items = itemsData || [];
+    const productMap = new Map<string, { quantity: number; revenue: number }>();
+    
+    items.forEach(item => {
+      const existing = productMap.get(item.product_name) || { quantity: 0, revenue: 0 };
+      productMap.set(item.product_name, {
+        quantity: existing.quantity + item.quantity,
+        revenue: existing.revenue + (item.price * item.quantity),
+      });
+    });
+    
+    const topProducts = Array.from(productMap.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 10);
+    
+    return {
+      totalOrders: orders.length,
+      paidOrders: paidOrders.length,
+      cancelledOrders: cancelledOrders.length,
+      totalRevenue,
+      cashRevenue,
+      cardRevenue,
+      totalDiscounts,
+      avgOrderValue: paidOrders.length > 0 ? totalRevenue / paidOrders.length : 0,
+      topProducts,
     };
   },
 };

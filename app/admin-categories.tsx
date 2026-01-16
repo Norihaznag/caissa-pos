@@ -31,11 +31,13 @@ export default function AdminCategoriesScreen() {
         productService.getAll(),
       ]);
       
-      const categoriesData = categoriesDb.map(c => ({
+      const safeCategories = Array.isArray(categoriesDb) ? categoriesDb : [];
+      const safeProducts = Array.isArray(productsDb) ? productsDb : [];
+      const categoriesData = safeCategories.filter(c => c && c.id).map(c => ({
         id: c.id,
-        name: c.name,
-        order: c.display_order,
-        productCount: productsDb.filter(p => p.category_id === c.id).length,
+        name: c.name || '',
+        order: c.display_order || 0,
+        productCount: safeProducts.filter(p => p && p.category_id === c.id).length,
       }));
       setCategories(categoriesData);
     } catch (error) {
@@ -133,29 +135,56 @@ export default function AdminCategoriesScreen() {
   };
 
   const renderCategory = ({ item, index }: { item: Category; index: number }) => (
-    <View className="bg-white border-b border-gray-200 px-4 py-4">
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-3">
-          <View className="w-10 h-10 bg-gray-100 rounded-lg items-center justify-center">
-            <Text className="text-lg font-bold text-gray-500">{index + 1}</Text>
+    <View style={{
+      backgroundColor: '#FFFFFF',
+      borderBottomWidth: 1,
+      borderBottomColor: '#E5E7EB',
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{
+            width: 40,
+            height: 40,
+            backgroundColor: '#F3F4F6',
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#6B7280' }}>{index + 1}</Text>
           </View>
           <View>
-            <Text className="text-base font-semibold text-gray-900">{item.name}</Text>
-            <Text className="text-sm text-gray-500 mt-1">
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>{item.name}</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
               {item.productCount} produits
             </Text>
           </View>
         </View>
-        <View className="flex-row items-center gap-2">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TouchableOpacity
             onPress={() => openEditModal(item)}
-            className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg"
+            style={{
+              width: 40,
+              height: 40,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#F3F4F6',
+              borderRadius: 10,
+            }}
           >
             <Pencil size={18} color="#6B7280" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => handleDelete(item)}
-            className="w-10 h-10 items-center justify-center bg-red-50 rounded-lg"
+            style={{
+              width: 40,
+              height: 40,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#FEE2E2',
+              borderRadius: 10,
+            }}
           >
             <Trash2 size={18} color="#EF4444" />
           </TouchableOpacity>
@@ -165,28 +194,49 @@ export default function AdminCategoriesScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       {/* Header */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, marginRight: 12 }}>
             <TouchableOpacity
               onPress={() => router.back()}
-              className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg"
+              style={{
+                width: 40,
+                height: 40,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#F3F4F6',
+                borderRadius: 10,
+              }}
             >
               <ArrowLeft size={20} color="#374151" />
             </TouchableOpacity>
-            <View>
-              <Text className="text-xl font-bold text-gray-900">Catégories</Text>
-              <Text className="text-sm text-gray-500">{categories.length} catégories</Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }} numberOfLines={1}>Catégories</Text>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>{categories.length} catégories</Text>
             </View>
           </View>
           <TouchableOpacity
             onPress={openAddModal}
-            className="flex-row items-center gap-2 bg-blue-500 px-4 py-2 rounded-lg"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#3B82F6',
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderRadius: 10,
+            }}
           >
             <Plus size={18} color="#FFFFFF" />
-            <Text className="text-white font-semibold">Ajouter</Text>
+            <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Ajouter</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -198,12 +248,12 @@ export default function AdminCategoriesScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
         ListEmptyComponent={
-          <View className="flex-1 items-center justify-center py-20">
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 64 }}>
             <Grid3x3 size={48} color="#D1D5DB" />
-            <Text className="text-gray-400 mt-4 text-center text-base">
+            <Text style={{ color: '#9CA3AF', marginTop: 16, textAlign: 'center', fontSize: 15 }}>
               Aucune catégorie
             </Text>
-            <Text className="text-gray-400 mt-1 text-center text-sm">
+            <Text style={{ color: '#9CA3AF', marginTop: 4, textAlign: 'center', fontSize: 13 }}>
               Appuyez sur Ajouter pour créer une catégorie
             </Text>
           </View>
@@ -216,7 +266,7 @@ export default function AdminCategoriesScreen() {
         onClose={() => setShowModal(false)}
         title={editingCategory ? 'Modifier Catégorie' : 'Nouvelle Catégorie'}
       >
-        <View className="gap-4 pb-6">
+        <View style={{ gap: 16, paddingBottom: 24 }}>
           <Input
             label="Nom de la catégorie"
             value={formName}
@@ -225,18 +275,28 @@ export default function AdminCategoriesScreen() {
             autoFocus
           />
 
-          <View className="flex-row gap-3 mt-4">
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
             <TouchableOpacity
               onPress={() => setShowModal(false)}
-              className="flex-1 py-3 bg-gray-100 rounded-lg"
+              style={{
+                flex: 1,
+                paddingVertical: 14,
+                backgroundColor: '#F3F4F6',
+                borderRadius: 10,
+              }}
             >
-              <Text className="text-center font-semibold text-gray-700">Annuler</Text>
+              <Text style={{ textAlign: 'center', fontWeight: '600', color: '#374151', fontSize: 15 }}>Annuler</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSave}
-              className="flex-1 py-3 bg-blue-500 rounded-lg"
+              style={{
+                flex: 1,
+                paddingVertical: 14,
+                backgroundColor: '#3B82F6',
+                borderRadius: 10,
+              }}
             >
-              <Text className="text-center font-semibold text-white">
+              <Text style={{ textAlign: 'center', fontWeight: '600', color: '#FFFFFF', fontSize: 15 }}>
                 {editingCategory ? 'Modifier' : 'Ajouter'}
               </Text>
             </TouchableOpacity>

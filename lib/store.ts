@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Types
-export type UserRole = 'admin' | 'waiter' | 'kitchen' | null;
+export type UserRole = 'admin' | 'waiter' | 'kitchen' | 'cashier' | null;
 
 export interface User {
   id: string;
@@ -23,7 +23,9 @@ export interface Product {
   name: string;
   price: number;
   categoryId: string;
+  categoryName?: string;
   isActive: boolean;
+  imageUrl?: string;
 }
 
 export interface Table {
@@ -61,6 +63,10 @@ export interface Order {
   paidAt?: Date;
   discount?: number;
   discountType?: 'percent' | 'amount';
+  amountReceived?: number;
+  change?: number;
+  cancellationReason?: string;
+  cancelledAt?: Date;
 }
 
 export interface SyncQueueItem {
@@ -122,8 +128,8 @@ interface AppState {
   
   // Actions - Complete flows
   createOrderAndOccupyTable: (order: Order, tableId: string) => void;
-  completePaymentAndFreeTable: (orderId: string, tableId: string, paymentData: { method: 'cash' | 'card'; discount?: number; discountType?: 'percent' | 'amount' }) => void;
-  cancelOrderAndFreeTable: (orderId: string, tableId: string) => void;
+  completePaymentAndFreeTable: (orderId: string, tableId: string, paymentData: { method: 'cash' | 'card'; discount?: number; discountType?: 'percent' | 'amount'; amountReceived?: number; change?: number }) => void;
+  cancelOrderAndFreeTable: (orderId: string, tableId: string, reason?: string) => void;
   
   // Actions - Sync
   addToSyncQueue: (item: Omit<SyncQueueItem, 'id' | 'createdAt' | 'retries'>) => void;
@@ -258,6 +264,8 @@ export const useAppStore = create<AppState>()(
                 paymentMethod: paymentData.method,
                 discount: paymentData.discount,
                 discountType: paymentData.discountType,
+                amountReceived: paymentData.amountReceived,
+                change: paymentData.change,
                 paidAt: new Date(),
                 updatedAt: new Date() 
               } 
@@ -270,10 +278,16 @@ export const useAppStore = create<AppState>()(
         ),
       })),
       
-      cancelOrderAndFreeTable: (orderId, tableId) => set((state) => ({
+      cancelOrderAndFreeTable: (orderId, tableId, reason) => set((state) => ({
         orders: state.orders.map((o) => 
           o.id === orderId 
-            ? { ...o, status: 'CANCELLED' as OrderStatus, updatedAt: new Date() } 
+            ? { 
+                ...o, 
+                status: 'CANCELLED' as OrderStatus, 
+                updatedAt: new Date(),
+                cancellationReason: reason,
+                cancelledAt: new Date(),
+              } 
             : o
         ),
         tables: state.tables.map((t) => 

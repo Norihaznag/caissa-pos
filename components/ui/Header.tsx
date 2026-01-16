@@ -23,30 +23,59 @@ export function Header({
   const router = useRouter();
 
   return (
-    <View className="bg-white border-b border-gray-200 px-4 py-3">
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-3">
+    <View style={{
+      backgroundColor: '#FFFFFF',
+      borderBottomWidth: 1,
+      borderBottomColor: '#E5E7EB',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    }}>
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1 }}>
           {showBack && (
             <TouchableOpacity
               onPress={() => router.back()}
-              className="w-10 h-10 items-center justify-center rounded-lg bg-gray-100"
+              style={{
+                width: 40,
+                height: 40,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 10,
+                backgroundColor: '#F3F4F6',
+              }}
             >
               <ArrowLeft size={20} color="#374151" />
             </TouchableOpacity>
           )}
-          <View>
+          <View style={{ flexShrink: 1 }}>
             {subtitle && (
-              <Text className="text-xs text-gray-500">{subtitle}</Text>
+              <Text style={{ fontSize: 12, color: '#6B7280' }}>{subtitle}</Text>
             )}
-            <Text className="text-xl font-bold text-gray-900">{title}</Text>
+            <Text 
+              style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
           </View>
         </View>
         
-        <View className="flex-row items-center gap-2">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {onRefresh && (
             <TouchableOpacity
               onPress={onRefresh}
-              className="w-10 h-10 items-center justify-center rounded-lg bg-gray-100"
+              style={{
+                width: 40,
+                height: 40,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 10,
+                backgroundColor: '#F3F4F6',
+              }}
             >
               <RefreshCw size={20} color="#3B82F6" />
             </TouchableOpacity>
@@ -54,7 +83,14 @@ export function Header({
           {onLogout && (
             <TouchableOpacity
               onPress={onLogout}
-              className="w-10 h-10 items-center justify-center rounded-lg bg-gray-100"
+              style={{
+                width: 40,
+                height: 40,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 10,
+                backgroundColor: '#FEE2E2',
+              }}
             >
               <LogOut size={20} color="#EF4444" />
             </TouchableOpacity>

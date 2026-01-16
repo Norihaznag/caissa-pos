@@ -19,6 +19,7 @@ interface OrderHistoryItem {
   itemsCount: number;
   total: number;
   paymentMethod?: 'cash' | 'card';
+  cancellationReason?: string;
 }
 
 export default function OrderHistoryScreen() {
@@ -40,11 +41,13 @@ export default function OrderHistoryScreen() {
       
       // Transform orders
       const ordersData: OrderHistoryItem[] = await Promise.all(
-        ordersDb.map(async (o) => {
-          const items = await orderItemService.getByOrderId(o.id);
+        (ordersDb || []).filter(o => o && o.id).map(async (o) => {
+          const items = await orderItemService.getByOrderId(o.id).catch(() => []);
           const table = tablesDb.find(t => t.id === o.table_id);
           const waiter = usersDb.find(u => u.id === o.waiter_id);
-          const itemsCount = items.reduce((sum, i) => sum + i.quantity, 0);
+          const itemsCount = Array.isArray(items) 
+            ? (items as any[]).reduce((sum, i) => sum + (i?.quantity || 0), 0)
+            : 0;
           
           // Map status to simpler type
           let status: OrderStatus = 'PENDING';
@@ -55,11 +58,13 @@ export default function OrderHistoryScreen() {
             id: o.id,
             tableNumber: table?.number || 0,
             waiterName: waiter?.name || 'Serveur',
-            createdAt: new Date(o.created_at),
-            completedAt: o.status === 'PAID' ? new Date(o.updated_at) : undefined,
+            createdAt: o.created_at ? new Date(o.created_at) : new Date(),
+            completedAt: (o.status === 'PAID' && o.updated_at) ? new Date(o.updated_at) : undefined,
             status,
-            itemsCount,
-            total: o.total_amount,
+            itemsCount: itemsCount || 0,
+            total: o.total_amount || 0,
+            paymentMethod: o.payment_method,
+            cancellationReason: o.cancellation_reason,
           };
         })
       );
@@ -124,47 +129,73 @@ export default function OrderHistoryScreen() {
     return (
       <TouchableOpacity
         onPress={() => router.push(`/receipt?orderId=${item.id}&tableNumber=${item.tableNumber}`)}
-        className="bg-white border-b border-gray-100 px-4 py-4"
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderBottomWidth: 1,
+          borderBottomColor: '#F3F4F6',
+          paddingHorizontal: 16,
+          paddingVertical: 16,
+        }}
       >
-        <View className="flex-row justify-between items-start mb-2">
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
           <View>
-            <Text className="text-base font-semibold text-gray-900">
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>
               Table {item.tableNumber}
             </Text>
-            <Text className="text-sm text-gray-500">{item.waiterName}</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{item.waiterName}</Text>
           </View>
           <View
-            style={{ backgroundColor: statusColors.bg }}
-            className="px-2 py-1 rounded"
+            style={{
+              backgroundColor: statusColors.bg,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 4,
+            }}
           >
-            <Text style={{ color: statusColors.text }} className="text-xs font-semibold">
+            <Text style={{ color: statusColors.text, fontSize: 11, fontWeight: '600' }}>
               {getStatusText(item.status)}
             </Text>
           </View>
         </View>
 
-        <View className="flex-row items-center gap-4 mb-2">
-          <View className="flex-row items-center gap-1">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Clock size={14} color="#6B7280" />
-            <Text className="text-sm text-gray-500">
+            <Text style={{ fontSize: 13, color: '#6B7280' }}>
               {item.createdAt && !isNaN(item.createdAt.getTime()) 
                 ? format(item.createdAt, 'HH:mm', { locale: fr })
                 : '--:--'}
             </Text>
           </View>
-          <Text className="text-sm text-gray-500">
+          <Text style={{ fontSize: 13, color: '#6B7280' }}>
             {item.itemsCount} articles
           </Text>
           {item.paymentMethod && (
-            <Text className="text-sm text-gray-500">
+            <Text style={{ fontSize: 13, color: '#6B7280' }}>
               {item.paymentMethod === 'cash' ? 'Espèces' : 'Carte'}
             </Text>
           )}
         </View>
 
-        <View className="flex-row justify-between items-center">
-          <Text className="text-xs text-gray-400 font-mono">{item.id}</Text>
-          <Text className="text-lg font-bold text-blue-600">{item.total} MAD</Text>
+        {/* Cancellation Reason */}
+        {item.status === 'CANCELLED' && item.cancellationReason && (
+          <View style={{ 
+            backgroundColor: '#FEF2F2', 
+            padding: 8, 
+            borderRadius: 6, 
+            marginBottom: 8,
+            borderLeftWidth: 3,
+            borderLeftColor: '#EF4444',
+          }}>
+            <Text style={{ fontSize: 12, color: '#991B1B', fontWeight: '500' }}>
+              Raison: {item.cancellationReason}
+            </Text>
+          </View>
+        )}
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ fontSize: 11, color: '#9CA3AF', fontFamily: 'monospace' }}>{item.id}</Text>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: '#2563EB' }}>{item.total} MAD</Text>
         </View>
       </TouchableOpacity>
     );
@@ -175,19 +206,32 @@ export default function OrderHistoryScreen() {
     .reduce((sum, o) => sum + o.total, 0);
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       {/* Header */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <View className="flex-row items-center gap-3">
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity
             onPress={() => router.back()}
-            className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg"
+            style={{
+              width: 40,
+              height: 40,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#F3F4F6',
+              borderRadius: 10,
+            }}
           >
             <ArrowLeft size={20} color="#374151" />
           </TouchableOpacity>
-          <View className="flex-1">
-            <Text className="text-xl font-bold text-gray-900">Historique</Text>
-            <Text className="text-sm text-gray-500">
+          <View style={{ flex: 1, flexShrink: 1 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }} numberOfLines={1}>Historique</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280' }} numberOfLines={1}>
               {filteredOrders.length} commandes • {todayTotal} MAD
             </Text>
           </View>
@@ -195,31 +239,54 @@ export default function OrderHistoryScreen() {
       </View>
 
       {/* Search & Filter */}
-      <View className="bg-white border-b border-gray-200 p-4">
-        <View className="flex-row items-center gap-2 bg-gray-100 rounded-lg px-3 py-2 mb-3">
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        padding: 16,
+      }}>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          backgroundColor: '#F3F4F6',
+          borderRadius: 10,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          marginBottom: 12,
+        }}>
           <Search size={18} color="#6B7280" />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Rechercher par table, serveur, ID..."
-            className="flex-1 text-gray-900"
+            style={{
+              flex: 1,
+              color: '#111827',
+              fontSize: 14,
+            }}
             placeholderTextColor="#9CA3AF"
           />
         </View>
 
-        <View className="flex-row gap-2">
+        <View style={{ flexDirection: 'row', gap: 8 }}>
           {(['ALL', 'PAID', 'PENDING', 'CANCELLED'] as const).map((status) => (
             <TouchableOpacity
               key={status}
               onPress={() => setFilterStatus(status)}
-              className={`px-3 py-2 rounded-lg ${
-                filterStatus === status ? 'bg-blue-500' : 'bg-gray-100'
-              }`}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                backgroundColor: filterStatus === status ? '#3B82F6' : '#F3F4F6',
+              }}
             >
               <Text
-                className={`text-sm font-medium ${
-                  filterStatus === status ? 'text-white' : 'text-gray-600'
-                }`}
+                style={{
+                  fontSize: 13,
+                  fontWeight: '500',
+                  color: filterStatus === status ? '#FFFFFF' : '#4B5563',
+                }}
               >
                 {status === 'ALL' ? 'Toutes' : getStatusText(status as OrderStatus)}
               </Text>
@@ -241,9 +308,9 @@ export default function OrderHistoryScreen() {
           />
         }
         ListEmptyComponent={
-          <View className="flex-1 items-center justify-center py-20">
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 64 }}>
             <Receipt size={48} color="#D1D5DB" />
-            <Text className="text-gray-400 mt-4 text-center">
+            <Text style={{ color: '#9CA3AF', marginTop: 16, textAlign: 'center', fontSize: 15 }}>
               Aucune commande trouvée
             </Text>
           </View>

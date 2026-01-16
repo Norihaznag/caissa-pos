@@ -47,14 +47,19 @@ export function useDataSync() {
         order: c.display_order,
       }));
 
-      // Transform products
-      const products = productsDb.map(p => ({
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        categoryId: p.category_id,
-        isActive: p.is_active,
-      }));
+      // Transform products with category name
+      const products = productsDb.map(p => {
+        const category = categories.find(c => c.id === p.category_id);
+        return {
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          categoryId: p.category_id,
+          categoryName: category?.name,
+          isActive: p.is_active,
+          imageUrl: p.image_url,
+        };
+      });
 
       // Transform tables and fetch active order totals
       const tables = await Promise.all(
@@ -78,26 +83,26 @@ export function useDataSync() {
 
       // Transform orders and fetch order items
       const orders = await Promise.all(
-        ordersDb.map(async (o) => {
-          const itemsDb = await orderItemService.getByOrderId(o.id);
+        (ordersDb || []).filter(o => o && o.id).map(async (o) => {
+          const itemsDb = await orderItemService.getByOrderId(o.id).catch(() => []);
           const table = tablesDb.find(t => t.id === o.table_id);
           
           return {
             id: o.id,
             tableId: o.table_id,
             tableNumber: table?.number || 0,
-            items: itemsDb.map(i => ({
-              id: i.id,
-              productId: i.product_id,
-              productName: i.product_name,
-              price: i.price,
-              quantity: i.quantity,
-            })),
-            status: o.status,
+            items: Array.isArray(itemsDb) ? itemsDb.filter(i => i).map(i => ({
+              id: i.id || '',
+              productId: i.product_id || '',
+              productName: i.product_name || 'Produit',
+              price: i.price || 0,
+              quantity: i.quantity || 0,
+            })) : [],
+            status: o.status || 'NEW',
             isServed: o.is_served || false,
-            totalAmount: o.total_amount,
-            createdAt: new Date(o.created_at),
-            updatedAt: new Date(o.updated_at),
+            totalAmount: o.total_amount || 0,
+            createdAt: o.created_at ? new Date(o.created_at) : new Date(),
+            updatedAt: o.updated_at ? new Date(o.updated_at) : new Date(),
             waiterId: o.waiter_id || undefined,
           };
         })

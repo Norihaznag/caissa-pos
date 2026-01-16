@@ -147,68 +147,107 @@ export default function PrinterSettingsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       {/* Header */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, marginRight: 12 }}>
             <TouchableOpacity
               onPress={() => router.back()}
-              className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg"
+              style={{
+                width: 40,
+                height: 40,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#F3F4F6',
+                borderRadius: 10,
+              }}
             >
               <ArrowLeft size={20} color="#374151" />
             </TouchableOpacity>
-            <View>
-              <Text className="text-xl font-bold text-gray-900">Imprimante</Text>
-              <Text className="text-sm text-gray-500">Configuration ESC/POS</Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }} numberOfLines={1}>Imprimante</Text>
+              <Text style={{ fontSize: 12, color: '#6B7280' }} numberOfLines={1}>Configuration ESC/POS</Text>
             </View>
           </View>
           <TouchableOpacity
             onPress={handleSave}
             disabled={saving}
-            className="px-4 py-2 bg-blue-500 rounded-lg"
+            style={{
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              backgroundColor: '#3B82F6',
+              borderRadius: 10,
+            }}
           >
-            <Text className="text-white font-semibold">
+            <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 13 }}>
               {saving ? 'Sauvegarde...' : 'Sauvegarder'}
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView className="flex-1 p-4">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
         {/* Printer Type Selection */}
-        <View className="bg-white rounded-lg border border-gray-200 mb-4">
-          <View className="p-4 border-b border-gray-100">
-            <Text className="text-sm font-semibold text-gray-700">TYPE D&apos;IMPRIMANTE</Text>
+        <View style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: '#E5E7EB',
+          marginBottom: 16,
+          overflow: 'hidden',
+        }}>
+          <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>TYPE D&apos;IMPRIMANTE</Text>
           </View>
-          <View className="p-2">
+          <View style={{ padding: 8 }}>
             {PRINTER_TYPES.map((printer) => (
               <TouchableOpacity
                 key={printer.type}
                 onPress={() => setConfig(prev => ({ ...prev, type: printer.type }))}
-                className={`flex-row items-center p-3 rounded-lg mb-1 ${
-                  config.type === printer.type ? 'bg-blue-50 border border-blue-200' : ''
-                }`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 12,
+                  borderRadius: 10,
+                  marginBottom: 4,
+                  backgroundColor: config.type === printer.type ? '#EFF6FF' : 'transparent',
+                  borderWidth: config.type === printer.type ? 1 : 0,
+                  borderColor: config.type === printer.type ? '#BFDBFE' : 'transparent',
+                }}
               >
-                <View className={`w-12 h-12 rounded-lg items-center justify-center ${
-                  config.type === printer.type ? 'bg-blue-100' : 'bg-gray-100'
-                }`}>
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: config.type === printer.type ? '#DBEAFE' : '#F3F4F6',
+                }}>
                   {printer.icon}
                 </View>
-                <View className="flex-1 ml-3">
-                  <Text className={`font-semibold ${
-                    config.type === printer.type ? 'text-blue-700' : 'text-gray-900'
-                  }`}>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={{
+                    fontWeight: '600',
+                    color: config.type === printer.type ? '#1D4ED8' : '#111827',
+                    fontSize: 15,
+                  }}>
                     {printer.label}
                   </Text>
-                  <Text className="text-sm text-gray-500">{printer.description}</Text>
+                  <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{printer.description}</Text>
                 </View>
                 {config.type === printer.type && (
                   <Check size={20} color="#3B82F6" />
@@ -219,16 +258,29 @@ export default function PrinterSettingsScreen() {
             {/* None option */}
             <TouchableOpacity
               onPress={() => setConfig(prev => ({ ...prev, type: 'none', enabled: false }))}
-              className={`flex-row items-center p-3 rounded-lg ${
-                config.type === 'none' ? 'bg-gray-100 border border-gray-300' : ''
-              }`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: 12,
+                borderRadius: 10,
+                backgroundColor: config.type === 'none' ? '#F3F4F6' : 'transparent',
+                borderWidth: config.type === 'none' ? 1 : 0,
+                borderColor: config.type === 'none' ? '#D1D5DB' : 'transparent',
+              }}
             >
-              <View className="w-12 h-12 rounded-lg items-center justify-center bg-gray-100">
+              <View style={{
+                width: 48,
+                height: 48,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#F3F4F6',
+              }}>
                 <Printer size={24} color="#9CA3AF" />
               </View>
-              <View className="flex-1 ml-3">
-                <Text className="font-semibold text-gray-600">Aucune</Text>
-                <Text className="text-sm text-gray-500">Désactiver l&apos;impression</Text>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={{ fontWeight: '600', color: '#4B5563', fontSize: 15 }}>Aucune</Text>
+                <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>Désactiver l&apos;impression</Text>
               </View>
               {config.type === 'none' && (
                 <Check size={20} color="#6B7280" />
@@ -240,36 +292,68 @@ export default function PrinterSettingsScreen() {
         {/* Connection Settings */}
         {config.type !== 'none' && (
           <>
-            <View className="bg-white rounded-lg border border-gray-200 mb-4">
-              <View className="p-4 border-b border-gray-100">
-                <Text className="text-sm font-semibold text-gray-700">CONNEXION</Text>
+            <View style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: '#E5E7EB',
+              marginBottom: 16,
+              overflow: 'hidden',
+            }}>
+              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>CONNEXION</Text>
               </View>
-              <View className="p-4">
-                <Text className="text-sm text-gray-600 mb-2">Nom de l&apos;imprimante</Text>
+              <View style={{ padding: 16 }}>
+                <Text style={{ fontSize: 13, color: '#4B5563', marginBottom: 8 }}>Nom de l&apos;imprimante</Text>
                 <TextInput
                   value={config.name}
                   onChangeText={(text) => setConfig(prev => ({ ...prev, name: text }))}
                   placeholder="Ex: Imprimante Cuisine"
-                  className="border border-gray-300 rounded-lg px-4 py-3 text-gray-900 mb-4"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#D1D5DB',
+                    borderRadius: 10,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    color: '#111827',
+                    marginBottom: 16,
+                    fontSize: 15,
+                  }}
                   placeholderTextColor="#9CA3AF"
                 />
                 
-                <Text className="text-sm text-gray-600 mb-2">
+                <Text style={{ fontSize: 13, color: '#4B5563', marginBottom: 8 }}>
                   {config.type === 'bluetooth' ? 'Adresse MAC' : 'Adresse IP:Port'}
                 </Text>
-                <View className="flex-row gap-2">
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TextInput
                     value={config.address}
                     onChangeText={(text) => setConfig(prev => ({ ...prev, address: text }))}
                     placeholder={config.type === 'bluetooth' ? 'XX:XX:XX:XX:XX:XX' : '192.168.1.100:9100'}
-                    className="flex-1 border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      borderRadius: 10,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      color: '#111827',
+                      fontSize: 15,
+                    }}
                     placeholderTextColor="#9CA3AF"
                     autoCapitalize="none"
                   />
                   {config.type === 'bluetooth' && (
                     <TouchableOpacity
                       onPress={handleScanBluetooth}
-                      className="w-12 h-12 items-center justify-center bg-blue-100 rounded-lg"
+                      style={{
+                        width: 48,
+                        height: 48,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#DBEAFE',
+                        borderRadius: 10,
+                      }}
                     >
                       <RefreshCw size={20} color="#3B82F6" />
                     </TouchableOpacity>
@@ -277,12 +361,12 @@ export default function PrinterSettingsScreen() {
                 </View>
                 
                 {config.type === 'bluetooth' && (
-                  <Text className="text-xs text-gray-500 mt-2">
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 8 }}>
                     Trouvez l&apos;adresse MAC dans les paramètres Bluetooth de votre téléphone
                   </Text>
                 )}
                 {config.type === 'network' && (
-                  <Text className="text-xs text-gray-500 mt-2">
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 8 }}>
                     Port par défaut: 9100 pour la plupart des imprimantes ESC/POS
                   </Text>
                 )}
@@ -290,26 +374,39 @@ export default function PrinterSettingsScreen() {
             </View>
 
             {/* Paper Settings */}
-            <View className="bg-white rounded-lg border border-gray-200 mb-4">
-              <View className="p-4 border-b border-gray-100">
-                <Text className="text-sm font-semibold text-gray-700">PAPIER</Text>
+            <View style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: '#E5E7EB',
+              marginBottom: 16,
+              overflow: 'hidden',
+            }}>
+              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>PAPIER</Text>
               </View>
-              <View className="p-4">
-                <Text className="text-sm text-gray-600 mb-3">Largeur du papier</Text>
-                <View className="flex-row gap-3">
+              <View style={{ padding: 16 }}>
+                <Text style={{ fontSize: 13, color: '#4B5563', marginBottom: 12 }}>Largeur du papier</Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
                   {PAPER_WIDTHS.map((width) => (
                     <TouchableOpacity
                       key={width.value}
                       onPress={() => setConfig(prev => ({ ...prev, paperWidth: width.value as 58 | 80 }))}
-                      className={`flex-1 py-3 rounded-lg border-2 ${
-                        config.paperWidth === width.value
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 bg-white'
-                      }`}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 12,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor: config.paperWidth === width.value ? '#3B82F6' : '#E5E7EB',
+                        backgroundColor: config.paperWidth === width.value ? '#EFF6FF' : '#FFFFFF',
+                      }}
                     >
-                      <Text className={`text-center font-semibold ${
-                        config.paperWidth === width.value ? 'text-blue-700' : 'text-gray-700'
-                      }`}>
+                      <Text style={{
+                        textAlign: 'center',
+                        fontWeight: '600',
+                        color: config.paperWidth === width.value ? '#1D4ED8' : '#374151',
+                        fontSize: 15,
+                      }}>
                         {width.label}
                       </Text>
                     </TouchableOpacity>
@@ -322,10 +419,19 @@ export default function PrinterSettingsScreen() {
             <TouchableOpacity
               onPress={handleTestPrint}
               disabled={testing}
-              className="bg-green-500 py-4 rounded-lg flex-row items-center justify-center gap-2 mb-4"
+              style={{
+                backgroundColor: '#22C55E',
+                paddingVertical: 16,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                marginBottom: 16,
+              }}
             >
               <Printer size={20} color="#FFFFFF" />
-              <Text className="text-white font-semibold text-base">
+              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 15 }}>
                 {testing ? 'Test en cours...' : 'Imprimer un ticket test'}
               </Text>
             </TouchableOpacity>
@@ -333,9 +439,15 @@ export default function PrinterSettingsScreen() {
         )}
 
         {/* Help Section */}
-        <View className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-          <Text className="text-blue-800 font-semibold mb-2">💡 Conseils</Text>
-          <Text className="text-blue-700 text-sm leading-5">
+        <View style={{
+          backgroundColor: '#EFF6FF',
+          borderRadius: 12,
+          padding: 16,
+          borderWidth: 1,
+          borderColor: '#BFDBFE',
+        }}>
+          <Text style={{ color: '#1E40AF', fontWeight: '600', marginBottom: 8, fontSize: 14 }}>💡 Conseils</Text>
+          <Text style={{ color: '#1D4ED8', fontSize: 13, lineHeight: 20 }}>
             • Pour Bluetooth: Appairez d&apos;abord l&apos;imprimante dans les paramètres du téléphone{'\n'}
             • Pour Réseau: Utilisez une IP statique pour l&apos;imprimante{'\n'}
             • La plupart des imprimantes thermiques utilisent le protocole ESC/POS{'\n'}
@@ -343,7 +455,7 @@ export default function PrinterSettingsScreen() {
           </Text>
         </View>
         
-        <View className="h-8" />
+        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );

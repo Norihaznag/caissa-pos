@@ -19,7 +19,7 @@ export interface DbUser {
   id: string;
   name: string;
   pin: string;
-  role: 'admin' | 'waiter' | 'kitchen';
+  role: 'admin' | 'waiter' | 'kitchen' | 'cashier';
   is_active: boolean;
   created_at: string;
 }
@@ -37,6 +37,7 @@ export interface DbProduct {
   price: number;
   category_id: string;
   is_active: boolean;
+  image_url?: string;
   created_at: string;
 }
 
@@ -57,6 +58,14 @@ export interface DbOrder {
   total_amount: number;
   created_at: string;
   updated_at: string;
+  cancellation_reason?: string;
+  cancelled_at?: string;
+  payment_method?: 'cash' | 'card';
+  discount?: number;
+  discount_type?: 'percent' | 'amount';
+  amount_received?: number;
+  change_amount?: number;
+  paid_at?: string;
 }
 
 export interface DbOrderItem {
@@ -66,5 +75,6 @@ export interface DbOrderItem {
   product_name: string;
   price: number;
   quantity: number;
+  note?: string;
   created_at: string;
 }

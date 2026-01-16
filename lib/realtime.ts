@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { useAppStore } from './store';
 
@@ -83,8 +83,8 @@ export const useRealtimeOrders = () => {
         status: order.status,
         isServed: order.is_served || false,
         totalAmount: order.total_amount,
-        createdAt: new Date(order.created_at),
-        updatedAt: new Date(order.updated_at),
+        createdAt: order.created_at ? new Date(order.created_at) : new Date(),
+        updatedAt: order.updated_at ? new Date(order.updated_at) : new Date(),
         waiterId: order.waiter_id,
       });
     } catch (error) {
@@ -133,17 +133,19 @@ export const useRealtimeTables = () => {
 // Hook to play sound notification for new orders
 export const useOrderNotification = () => {
   const orders = useAppStore((state) => state.orders);
-  const [lastOrderCount, setLastOrderCount] = useState(orders.length);
+  const lastOrderCountRef = React.useRef(0);
 
   useEffect(() => {
-    const newOrders = orders.filter((o) => o.status === 'NEW');
+    const newOrders = Array.isArray(orders) 
+      ? orders.filter((o) => o && o.status === 'NEW')
+      : [];
     
-    if (newOrders.length > lastOrderCount) {
+    if (newOrders.length > lastOrderCountRef.current) {
       // New order received - play notification sound
       playNotificationSound();
     }
     
-    setLastOrderCount(newOrders.length);
+    lastOrderCountRef.current = newOrders.length;
   }, [orders]);
 
   const playNotificationSound = () => {

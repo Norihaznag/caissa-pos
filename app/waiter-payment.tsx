@@ -12,9 +12,9 @@ type PaymentMethod = 'cash' | 'card';
 export default function PaymentScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const tableNumber = params.tableNumber || '1';
-  const tableId = params.tableId as string;
-  const orderId = params.orderId as string;
+  const tableNumber = params.tableNumber ? String(params.tableNumber) : '1';
+  const tableId = params.tableId ? String(params.tableId) : '';
+  const orderId = params.orderId ? String(params.orderId) : '';
   
   const orders = useAppStore((state) => state.orders);
   const completePaymentAndFreeTable = useAppStore((state) => state.completePaymentAndFreeTable);
@@ -26,6 +26,14 @@ export default function PaymentScreen() {
   const [discountPercent, setDiscountPercent] = useState('');
   const [discountAmount, setDiscountAmount] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [paramsValid, setParamsValid] = useState(true);
+
+  // Validate params on mount
+  useEffect(() => {
+    if (!orderId || !tableId) {
+      setParamsValid(false);
+    }
+  }, [orderId, tableId]);
 
   // Load order data
   useEffect(() => {
@@ -53,16 +61,18 @@ export default function PaymentScreen() {
     : 0;
 
   // Calculate discount
+  const parsedDiscountPercent = parseFloat(discountPercent || '0');
+  const parsedDiscountAmount = parseFloat(discountAmount || '0');
   const discountValue = discountPercent 
-    ? (subtotal * parseFloat(discountPercent || '0')) / 100
-    : parseFloat(discountAmount || '0');
+    ? (subtotal * (isNaN(parsedDiscountPercent) ? 0 : parsedDiscountPercent)) / 100
+    : (isNaN(parsedDiscountAmount) ? 0 : parsedDiscountAmount);
 
   // Calculate total
   const total = Math.max(0, subtotal - discountValue);
 
   // Calculate change
-  const received = parseFloat(amountReceived || '0');
-  const change = received - total;
+  const received = parseFloat(amountReceived || '0') || 0;
+  const change = Math.max(0, received - total);
 
   // Quick amount buttons
   const quickAmounts = [50, 100, 200, 500];
@@ -83,8 +93,23 @@ export default function PaymentScreen() {
     setProcessing(true);
     
     try {
-      // Update order status in Supabase
-      await orderService.updateStatus(orderId, 'PAID');
+      // Get discount info
+      const discount = discountValue;
+      const discountType: 'percent' | 'amount' = discountPercent ? 'percent' : 'amount';
+      const finalAmountReceived = paymentMethod === 'cash' ? received : total;
+      const finalChange = paymentMethod === 'cash' ? Math.max(0, change) : 0;
+
+      // Update order in Supabase with payment details
+      await orderService.update(orderId, {
+        status: 'PAID',
+        payment_method: paymentMethod,
+        discount: discount > 0 ? discount : undefined,
+        discount_type: discount > 0 ? discountType : undefined,
+        amount_received: finalAmountReceived,
+        change_amount: finalChange,
+        paid_at: new Date().toISOString(),
+        total_amount: total,
+      });
       
       // Free the table in Supabase
       await tableService.setOpen(currentTableId);
@@ -92,15 +117,13 @@ export default function PaymentScreen() {
       // Success haptic
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Get discount info
-      const discount = discountValue;
-      const discountType: 'percent' | 'amount' = discountPercent ? 'percent' : 'amount';
-
       // Complete payment and free table in local store
       completePaymentAndFreeTable(orderId, currentTableId, {
         method: paymentMethod,
         discount: discount,
         discountType: discountType,
+        amountReceived: finalAmountReceived,
+        change: finalChange,
       });
 
       Alert.alert(
@@ -131,71 +154,123 @@ export default function PaymentScreen() {
     }
   };
 
+  // Invalid params - show error
+  if (!paramsValid) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#EF4444', fontSize: 16, textAlign: 'center', marginBottom: 16 }}>
+          Paramètres de commande manquants
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.replace('/waiter-tables')}
+          style={{ padding: 12, backgroundColor: '#3B82F6', borderRadius: 8 }}
+        >
+          <Text style={{ color: '#FFFFFF' }}>Retour aux tables</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       {/* Header */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <View className="flex-row items-center gap-3">
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity
             onPress={() => router.back()}
-            className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg"
+            style={{
+              width: 40,
+              height: 40,
+              backgroundColor: '#F3F4F6',
+              borderRadius: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             <ArrowLeft size={20} color="#374151" />
           </TouchableOpacity>
           <View>
-            <Text className="text-xl font-bold text-gray-900">Paiement</Text>
-            <Text className="text-sm text-gray-500">Table {tableNumber}</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Paiement</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280' }}>Table {tableNumber}</Text>
           </View>
         </View>
       </View>
 
-      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+      <ScrollView 
+        style={{ flex: 1 }} 
+        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Order Summary */}
-        <View className="bg-white border border-gray-200 rounded-lg mb-4">
-          <View className="p-4 border-b border-gray-100">
-            <Text className="text-sm font-semibold text-gray-700">RÉSUMÉ DE LA COMMANDE</Text>
+        <View style={{
+          backgroundColor: '#FFFFFF',
+          borderWidth: 1,
+          borderColor: '#E5E7EB',
+          borderRadius: 12,
+          marginBottom: 16,
+        }}>
+          <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#6B7280' }}>RÉSUMÉ DE LA COMMANDE</Text>
           </View>
-          <View className="p-4">
-            {orderItems.map((item) => (
-              <View key={item.id} className="flex-row justify-between items-center py-2">
-                <View className="flex-row items-center gap-2">
-                  <Text className="text-gray-500">{item.quantity}x</Text>
-                  <Text className="text-gray-900">{item.productName}</Text>
+          <View style={{ padding: 16 }}>
+            {orderItems.map((item, index) => {
+              if (!item) return null;
+              const price = Number(item.price) || 0;
+              const qty = Number(item.quantity) || 0;
+              return (
+                <View key={item.id || `item-${index}`} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ color: '#6B7280', fontSize: 14 }}>{qty}x</Text>
+                    <Text style={{ color: '#111827', fontSize: 15 }}>{item.productName || 'Article'}</Text>
+                  </View>
+                  <Text style={{ fontWeight: '500', color: '#111827', fontSize: 15 }}>
+                    {(price * qty).toFixed(2)} MAD
+                  </Text>
                 </View>
-                <Text className="font-medium text-gray-900">
-                  {(item.price * item.quantity)} MAD
-                </Text>
-              </View>
-            ))}
+              );
+            })}
             
-            <View className="border-t border-gray-200 mt-3 pt-3">
-              <View className="flex-row justify-between items-center">
-                <Text className="text-gray-500">Sous-total</Text>
-                <Text className="font-medium text-gray-900">{subtotal} MAD</Text>
+            <View style={{ borderTopWidth: 1, borderTopColor: '#E5E7EB', marginTop: 12, paddingTop: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: '#6B7280', fontSize: 14 }}>Sous-total</Text>
+                <Text style={{ fontWeight: '500', color: '#111827', fontSize: 15 }}>{subtotal} MAD</Text>
               </View>
               {discountValue > 0 && (
-                <View className="flex-row justify-between items-center mt-1">
-                  <Text className="text-green-600">Remise</Text>
-                  <Text className="font-medium text-green-600">-{discountValue.toFixed(2)} MAD</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                  <Text style={{ color: '#22C55E', fontSize: 14 }}>Remise</Text>
+                  <Text style={{ fontWeight: '500', color: '#22C55E', fontSize: 15 }}>-{discountValue.toFixed(2)} MAD</Text>
                 </View>
               )}
-              <View className="flex-row justify-between items-center mt-2">
-                <Text className="text-lg font-bold text-gray-900">Total</Text>
-                <Text className="text-xl font-bold text-blue-600">{total.toFixed(2)} MAD</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: '#111827' }}>Total</Text>
+                <Text style={{ fontSize: 22, fontWeight: '700', color: '#3B82F6' }}>{total.toFixed(2)} MAD</Text>
               </View>
             </View>
           </View>
         </View>
 
         {/* Discount Section */}
-        <View className="bg-white border border-gray-200 rounded-lg mb-4 p-4">
-          <View className="flex-row items-center gap-2 mb-3">
+        <View style={{
+          backgroundColor: '#FFFFFF',
+          borderWidth: 1,
+          borderColor: '#E5E7EB',
+          borderRadius: 12,
+          marginBottom: 16,
+          padding: 16,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Percent size={18} color="#6B7280" />
-            <Text className="text-sm font-semibold text-gray-700">REMISE (OPTIONNEL)</Text>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#6B7280' }}>REMISE (OPTIONNEL)</Text>
           </View>
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Text className="text-xs text-gray-500 mb-1">Pourcentage (%)</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6 }}>Pourcentage (%)</Text>
               <TextInput
                 value={discountPercent}
                 onChangeText={(v) => {
@@ -204,11 +279,22 @@ export default function PaymentScreen() {
                 }}
                 placeholder="0"
                 keyboardType="numeric"
-                className="border border-gray-300 rounded-lg px-3 py-2 text-center"
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  textAlign: 'center',
+                  fontSize: 16,
+                  color: '#111827',
+                  backgroundColor: '#F9FAFB',
+                }}
+                placeholderTextColor="#9CA3AF"
               />
             </View>
-            <View className="flex-1">
-              <Text className="text-xs text-gray-500 mb-1">Montant (MAD)</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6 }}>Montant (MAD)</Text>
               <TextInput
                 value={discountAmount}
                 onChangeText={(v) => {
@@ -217,39 +303,71 @@ export default function PaymentScreen() {
                 }}
                 placeholder="0"
                 keyboardType="numeric"
-                className="border border-gray-300 rounded-lg px-3 py-2 text-center"
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  textAlign: 'center',
+                  fontSize: 16,
+                  color: '#111827',
+                  backgroundColor: '#F9FAFB',
+                }}
+                placeholderTextColor="#9CA3AF"
               />
             </View>
           </View>
         </View>
 
         {/* Payment Method */}
-        <View className="bg-white border border-gray-200 rounded-lg mb-4 p-4">
-          <Text className="text-sm font-semibold text-gray-700 mb-3">MODE DE PAIEMENT</Text>
-          <View className="flex-row gap-3">
+        <View style={{
+          backgroundColor: '#FFFFFF',
+          borderWidth: 1,
+          borderColor: '#E5E7EB',
+          borderRadius: 12,
+          marginBottom: 16,
+          padding: 16,
+        }}>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 12 }}>MODE DE PAIEMENT</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
             <TouchableOpacity
               onPress={() => setPaymentMethod('cash')}
-              className={`flex-1 flex-row items-center justify-center gap-2 py-4 rounded-lg border-2 ${
-                paymentMethod === 'cash' 
-                  ? 'border-green-500 bg-green-50' 
-                  : 'border-gray-200 bg-white'
-              }`}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 16,
+                borderRadius: 10,
+                borderWidth: 2,
+                borderColor: paymentMethod === 'cash' ? '#22C55E' : '#E5E7EB',
+                backgroundColor: paymentMethod === 'cash' ? '#F0FDF4' : '#FFFFFF',
+              }}
             >
               <Banknote size={24} color={paymentMethod === 'cash' ? '#22C55E' : '#6B7280'} />
-              <Text className={`font-semibold ${paymentMethod === 'cash' ? 'text-green-700' : 'text-gray-600'}`}>
+              <Text style={{ fontWeight: '600', color: paymentMethod === 'cash' ? '#15803D' : '#6B7280', fontSize: 15 }}>
                 Espèces
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setPaymentMethod('card')}
-              className={`flex-1 flex-row items-center justify-center gap-2 py-4 rounded-lg border-2 ${
-                paymentMethod === 'card' 
-                  ? 'border-blue-500 bg-blue-50' 
-                  : 'border-gray-200 bg-white'
-              }`}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 16,
+                borderRadius: 10,
+                borderWidth: 2,
+                borderColor: paymentMethod === 'card' ? '#3B82F6' : '#E5E7EB',
+                backgroundColor: paymentMethod === 'card' ? '#EFF6FF' : '#FFFFFF',
+              }}
             >
               <CreditCard size={24} color={paymentMethod === 'card' ? '#3B82F6' : '#6B7280'} />
-              <Text className={`font-semibold ${paymentMethod === 'card' ? 'text-blue-700' : 'text-gray-600'}`}>
+              <Text style={{ fontWeight: '600', color: paymentMethod === 'card' ? '#1D4ED8' : '#6B7280', fontSize: 15 }}>
                 Carte
               </Text>
             </TouchableOpacity>
@@ -258,42 +376,90 @@ export default function PaymentScreen() {
 
         {/* Cash Payment - Amount Received */}
         {paymentMethod === 'cash' && (
-          <View className="bg-white border border-gray-200 rounded-lg mb-4 p-4">
-            <Text className="text-sm font-semibold text-gray-700 mb-3">MONTANT REÇU</Text>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            borderRadius: 12,
+            marginBottom: 16,
+            padding: 16,
+          }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 12 }}>MONTANT REÇU</Text>
             <TextInput
               value={amountReceived}
               onChangeText={setAmountReceived}
               placeholder={total.toFixed(2)}
               keyboardType="numeric"
-              className="border border-gray-300 rounded-lg px-4 py-3 text-xl text-center font-bold"
+              style={{
+                borderWidth: 1,
+                borderColor: '#E5E7EB',
+                borderRadius: 10,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                fontSize: 22,
+                textAlign: 'center',
+                fontWeight: '700',
+                color: '#111827',
+                backgroundColor: '#F9FAFB',
+              }}
+              placeholderTextColor="#9CA3AF"
             />
             
             {/* Quick Amount Buttons */}
-            <View className="flex-row flex-wrap gap-2 mt-3">
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
               {quickAmounts.map((amount) => (
                 <TouchableOpacity
                   key={amount}
                   onPress={() => setAmountReceived(amount.toString())}
-                  className="flex-1 min-w-[70px] py-3 bg-gray-100 rounded-lg"
+                  style={{
+                    flex: 1,
+                    minWidth: 70,
+                    paddingVertical: 12,
+                    backgroundColor: '#F3F4F6',
+                    borderRadius: 8,
+                    alignItems: 'center',
+                  }}
                 >
-                  <Text className="text-center font-semibold text-gray-700">{amount} MAD</Text>
+                  <Text style={{ fontWeight: '600', color: '#374151', fontSize: 14 }}>{amount} MAD</Text>
                 </TouchableOpacity>
               ))}
               <TouchableOpacity
                 onPress={() => setAmountReceived(total.toFixed(0))}
-                className="flex-1 min-w-[70px] py-3 bg-blue-100 rounded-lg"
+                style={{
+                  flex: 1,
+                  minWidth: 70,
+                  paddingVertical: 12,
+                  backgroundColor: '#DBEAFE',
+                  borderRadius: 8,
+                  alignItems: 'center',
+                }}
               >
-                <Text className="text-center font-semibold text-blue-700">Exact</Text>
+                <Text style={{ fontWeight: '600', color: '#1D4ED8', fontSize: 14 }}>Exact</Text>
               </TouchableOpacity>
             </View>
 
             {/* Change Display */}
             {received > 0 && (
-              <View className={`mt-4 p-4 rounded-lg ${change >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                <Text className={`text-center text-sm ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <View style={{
+                marginTop: 16,
+                padding: 16,
+                borderRadius: 10,
+                backgroundColor: change >= 0 ? '#F0FDF4' : '#FEF2F2',
+              }}>
+                <Text style={{
+                  textAlign: 'center',
+                  fontSize: 14,
+                  color: change >= 0 ? '#15803D' : '#DC2626',
+                }}>
                   {change >= 0 ? 'Monnaie à rendre' : 'Montant insuffisant'}
                 </Text>
-                <Text className={`text-center text-2xl font-bold ${change >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                <Text style={{
+                  textAlign: 'center',
+                  fontSize: 28,
+                  fontWeight: '700',
+                  color: change >= 0 ? '#15803D' : '#DC2626',
+                  marginTop: 4,
+                }}>
                   {Math.abs(change).toFixed(2)} MAD
                 </Text>
               </View>
@@ -303,14 +469,34 @@ export default function PaymentScreen() {
       </ScrollView>
 
       {/* Bottom Action */}
-      <View className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200">
+      <View style={{
+        padding: 16,
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 4,
+      }}>
         <TouchableOpacity
           onPress={handlePayment}
-          className="bg-green-500 py-4 rounded-lg flex-row items-center justify-center gap-2"
+          disabled={processing}
+          style={{
+            backgroundColor: processing ? '#9CA3AF' : '#22C55E',
+            paddingVertical: 16,
+            borderRadius: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+          }}
+          activeOpacity={0.8}
         >
-          <CheckCircle size={24} color="#FFFFFF" />
-          <Text className="text-white font-bold text-lg">
-            Confirmer Paiement ({total.toFixed(2)} MAD)
+          <CheckCircle size={22} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 17 }}>
+            {processing ? 'Traitement...' : `Confirmer (${total.toFixed(2)} MAD)`}
           </Text>
         </TouchableOpacity>
       </View>

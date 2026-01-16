@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Plus, Pencil, Trash2, LayoutGrid, List, Table2 } from 'lucide-react-native';
 import { Modal, Input } from '@/components/ui';
 import { tableService } from '../lib/services';
 
@@ -19,6 +19,7 @@ export default function AdminTablesScreen() {
   const [editingTable, setEditingTable] = useState<Table | null>(null);
   const [formNumber, setFormNumber] = useState('');
   const [loading, setLoading] = useState(true);
+  const [tableViewMode, setTableViewMode] = useState<'list' | 'grid'>('list');
   const [saving, setSaving] = useState(false);
 
   // Load data from Supabase
@@ -26,10 +27,11 @@ export default function AdminTablesScreen() {
     try {
       setLoading(true);
       const tablesDb = await tableService.getAll();
-      const tablesData = tablesDb.map(t => ({
+      const safeTablesDb = Array.isArray(tablesDb) ? tablesDb : [];
+      const tablesData = safeTablesDb.filter(t => t && t.id).map(t => ({
         id: t.id,
-        number: t.number,
-        status: t.status,
+        number: t.number || 0,
+        status: t.status || 'open',
       }));
       setTables(tablesData);
     } catch (error) {
@@ -46,7 +48,8 @@ export default function AdminTablesScreen() {
 
   const openAddModal = () => {
     setEditingTable(null);
-    const nextNumber = tables.length > 0 ? Math.max(...tables.map(t => t.number)) + 1 : 1;
+    const validNumbers = tables.map(t => t?.number).filter((n): n is number => typeof n === 'number' && !isNaN(n));
+    const nextNumber = validNumbers.length > 0 ? Math.max(...validNumbers) + 1 : 1;
     setFormNumber(nextNumber.toString());
     setShowModal(true);
   };
@@ -137,45 +140,77 @@ export default function AdminTablesScreen() {
   };
 
   const renderTable = ({ item }: { item: Table }) => (
-    <View className="bg-white border-b border-gray-200 px-4 py-4">
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-4">
-          <View className={`w-14 h-14 rounded-lg items-center justify-center ${
-            item.status === 'occupied' ? 'bg-blue-100' : 'bg-gray-100'
-          }`}>
-            <Text className={`text-xl font-bold ${
-              item.status === 'occupied' ? 'text-blue-600' : 'text-gray-600'
-            }`}>
+    <View style={{
+      backgroundColor: '#FFFFFF',
+      borderBottomWidth: 1,
+      borderBottomColor: '#E5E7EB',
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <View style={{
+            width: 56,
+            height: 56,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: item.status === 'occupied' ? '#DBEAFE' : '#F3F4F6',
+          }}>
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '700',
+              color: item.status === 'occupied' ? '#2563EB' : '#4B5563',
+            }}>
               {item.number}
             </Text>
           </View>
           <View>
-            <Text className="text-base font-semibold text-gray-900">
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>
               Table {item.number}
             </Text>
-            <View className={`mt-1 px-2 py-0.5 rounded-full self-start ${
-              item.status === 'occupied' ? 'bg-blue-100' : 'bg-green-100'
-            }`}>
-              <Text className={`text-xs font-medium ${
-                item.status === 'occupied' ? 'text-blue-700' : 'text-green-700'
-              }`}>
+            <View style={{
+              marginTop: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 12,
+              alignSelf: 'flex-start',
+              backgroundColor: item.status === 'occupied' ? '#DBEAFE' : '#DCFCE7',
+            }}>
+              <Text style={{
+                fontSize: 12,
+                fontWeight: '500',
+                color: item.status === 'occupied' ? '#1D4ED8' : '#166534',
+              }}>
                 {item.status === 'occupied' ? 'Occupée' : 'Libre'}
               </Text>
             </View>
           </View>
         </View>
-        <View className="flex-row items-center gap-2">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TouchableOpacity
             onPress={() => openEditModal(item)}
-            className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg"
+            style={{
+              width: 40,
+              height: 40,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#F3F4F6',
+              borderRadius: 10,
+            }}
           >
             <Pencil size={18} color="#6B7280" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => handleDelete(item)}
-            className={`w-10 h-10 items-center justify-center rounded-lg ${
-              item.status === 'occupied' ? 'bg-gray-100' : 'bg-red-50'
-            }`}
+            style={{
+              width: 40,
+              height: 40,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: item.status === 'occupied' ? '#F3F4F6' : '#FEE2E2',
+              borderRadius: 10,
+            }}
             disabled={item.status === 'occupied'}
           >
             <Trash2 size={18} color={item.status === 'occupied' ? '#D1D5DB' : '#EF4444'} />
@@ -186,47 +221,153 @@ export default function AdminTablesScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       {/* Header */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, marginRight: 12 }}>
             <TouchableOpacity
               onPress={() => router.back()}
-              className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg"
+              style={{
+                width: 40,
+                height: 40,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#F3F4F6',
+                borderRadius: 10,
+              }}
             >
               <ArrowLeft size={20} color="#374151" />
             </TouchableOpacity>
-            <View>
-              <Text className="text-xl font-bold text-gray-900">Tables</Text>
-              <Text className="text-sm text-gray-500">{tables.length} tables</Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }} numberOfLines={1}>Tables</Text>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>{tables.length} tables</Text>
             </View>
           </View>
           <TouchableOpacity
             onPress={openAddModal}
-            className="flex-row items-center gap-2 bg-blue-500 px-4 py-2 rounded-lg"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#3B82F6',
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderRadius: 10,
+            }}
           >
             <Plus size={18} color="#FFFFFF" />
-            <Text className="text-white font-semibold">Ajouter</Text>
+            <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Ajouter</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Info Banner */}
-      <View className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-        <Text className="text-sm text-gray-600">
+      {/* Info Banner + View Toggle */}
+      <View style={{
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: '#F9FAFB',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <Text style={{ fontSize: 13, color: '#4B5563' }}>
           {tables.filter(t => t.status === 'open').length} libres • {' '}
           {tables.filter(t => t.status === 'occupied').length} occupées
         </Text>
+        {/* Grid/List Toggle */}
+        <View style={{ flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 8, padding: 2, borderWidth: 1, borderColor: '#E5E7EB' }}>
+          <TouchableOpacity
+            onPress={() => setTableViewMode('list')}
+            style={{
+              padding: 6,
+              borderRadius: 6,
+              backgroundColor: tableViewMode === 'list' ? '#EFF6FF' : 'transparent',
+            }}
+          >
+            <List size={18} color={tableViewMode === 'list' ? '#3B82F6' : '#9CA3AF'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setTableViewMode('grid')}
+            style={{
+              padding: 6,
+              borderRadius: 6,
+              backgroundColor: tableViewMode === 'grid' ? '#EFF6FF' : 'transparent',
+            }}
+          >
+            <LayoutGrid size={18} color={tableViewMode === 'grid' ? '#3B82F6' : '#9CA3AF'} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Tables List */}
-      <FlatList
-        data={tables}
-        renderItem={renderTable}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 20 }}
-      />
+      {/* Tables List or Grid */}
+      {tableViewMode === 'list' ? (
+        <FlatList
+          data={tables}
+          renderItem={renderTable}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
+          ListEmptyComponent={
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 64 }}>
+              <Table2 size={48} color="#D1D5DB" />
+              <Text style={{ color: '#9CA3AF', marginTop: 16 }}>Aucune table</Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={tables}
+          numColumns={3}
+          key="grid"
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 12, flexGrow: 1 }}
+          columnWrapperStyle={{ gap: 10 }}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              onPress={() => openEditModal(item)}
+              activeOpacity={0.7}
+              style={{
+                flex: 1,
+                aspectRatio: 1,
+                backgroundColor: item.status === 'occupied' ? '#DBEAFE' : '#FFFFFF',
+                borderRadius: 12,
+                padding: 10,
+                borderWidth: 1,
+                borderColor: item.status === 'occupied' ? '#93C5FD' : '#E5E7EB',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 24, fontWeight: '700', color: item.status === 'occupied' ? '#2563EB' : '#374151' }}>
+                {item.number}
+              </Text>
+              <Text style={{ 
+                fontSize: 11, 
+                fontWeight: '500', 
+                color: item.status === 'occupied' ? '#2563EB' : '#16A34A',
+                marginTop: 4,
+              }}>
+                {item.status === 'occupied' ? 'OCCUPÉE' : 'LIBRE'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 64 }}>
+              <Table2 size={48} color="#D1D5DB" />
+              <Text style={{ color: '#9CA3AF', marginTop: 16 }}>Aucune table</Text>
+            </View>
+          }
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -234,7 +375,7 @@ export default function AdminTablesScreen() {
         onClose={() => setShowModal(false)}
         title={editingTable ? 'Modifier Table' : 'Nouvelle Table'}
       >
-        <View className="gap-4 pb-6">
+        <View style={{ gap: 16, paddingBottom: 24 }}>
           <Input
             label="Numéro de table"
             value={formNumber}
@@ -244,18 +385,28 @@ export default function AdminTablesScreen() {
             autoFocus
           />
 
-          <View className="flex-row gap-3 mt-4">
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
             <TouchableOpacity
               onPress={() => setShowModal(false)}
-              className="flex-1 py-3 bg-gray-100 rounded-lg"
+              style={{
+                flex: 1,
+                paddingVertical: 14,
+                backgroundColor: '#F3F4F6',
+                borderRadius: 10,
+              }}
             >
-              <Text className="text-center font-semibold text-gray-700">Annuler</Text>
+              <Text style={{ textAlign: 'center', fontWeight: '600', color: '#374151', fontSize: 15 }}>Annuler</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSave}
-              className="flex-1 py-3 bg-blue-500 rounded-lg"
+              style={{
+                flex: 1,
+                paddingVertical: 14,
+                backgroundColor: '#3B82F6',
+                borderRadius: 10,
+              }}
             >
-              <Text className="text-center font-semibold text-white">
+              <Text style={{ textAlign: 'center', fontWeight: '600', color: '#FFFFFF', fontSize: 15 }}>
                 {editingTable ? 'Modifier' : 'Ajouter'}
               </Text>
             </TouchableOpacity>

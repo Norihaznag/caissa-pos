@@ -1,14 +1,10 @@
-// Sound notifications - uses expo-av when available, falls back to haptics
+// Sound notifications - uses haptic feedback for notifications
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Try to import expo-av, gracefully handle if not installed
-let Audio: any = null;
-try {
-  Audio = require('expo-av').Audio;
-} catch {
-  console.log('expo-av not installed, using haptic feedback only');
-}
+// Note: expo-av has been deprecated in SDK 54
+// Using expo-haptics for tactile feedback instead
+// Audio playback can be added later using expo-audio if needed
 
 // Sound settings storage key
 const SOUND_SETTINGS_KEY = 'pos_sound_settings';
@@ -29,8 +25,8 @@ const defaultSoundSettings: SoundSettings = {
   paymentSound: true,
 };
 
-// Sound cache
-let soundCache: { [key: string]: Audio.Sound | null } = {};
+// Sound cache (for future audio implementation with expo-audio)
+let soundCache: { [key: string]: any } = {};
 
 // Save sound settings
 export const saveSoundSettings = async (settings: SoundSettings): Promise<void> => {
@@ -55,19 +51,10 @@ export const loadSoundSettings = async (): Promise<SoundSettings> => {
 // Sound types
 export type SoundType = 'newOrder' | 'kitchenAlert' | 'payment' | 'success' | 'error' | 'click';
 
-// Initialize audio
+// Initialize audio - placeholder for future expo-audio implementation
 export const initAudio = async (): Promise<void> => {
-  try {
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: false,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    });
-  } catch (error) {
-    console.error('Error initializing audio:', error);
-  }
+  // Audio initialization will be added when migrating to expo-audio
+  // Currently using haptic feedback only
 };
 
 // Play a beep pattern for different notifications
@@ -178,8 +165,11 @@ export const useNewOrderNotification = () => {
   const prevOrdersRef = useRef<string[]>([]);
 
   useEffect(() => {
+    // Defensive check for orders array
+    if (!orders || !Array.isArray(orders)) return;
+    
     const currentOrderIds = orders
-      .filter(o => o.status === 'NEW' && !o.isServed)
+      .filter(o => o && o.status === 'NEW' && !o.isServed)
       .map(o => o.id);
     
     const prevOrderIds = prevOrdersRef.current;
@@ -188,7 +178,10 @@ export const useNewOrderNotification = () => {
     const newOrderIds = currentOrderIds.filter(id => !prevOrderIds.includes(id));
     
     if (newOrderIds.length > 0) {
-      playNotificationSound('newOrder');
+      // Call async function with catch to prevent unhandled rejection
+      playNotificationSound('newOrder').catch(err => 
+        console.error('Error playing notification:', err)
+      );
     }
     
     prevOrdersRef.current = currentOrderIds;
@@ -201,8 +194,11 @@ export const useOrderReadyNotification = () => {
   const prevReadyOrdersRef = useRef<string[]>([]);
 
   useEffect(() => {
+    // Defensive check for orders array
+    if (!orders || !Array.isArray(orders)) return;
+    
     const readyOrderIds = orders
-      .filter(o => o.status === 'READY' && !o.isServed)
+      .filter(o => o && o.status === 'READY' && !o.isServed)
       .map(o => o.id);
     
     const prevReadyIds = prevReadyOrdersRef.current;
@@ -211,7 +207,10 @@ export const useOrderReadyNotification = () => {
     const newReadyIds = readyOrderIds.filter(id => !prevReadyIds.includes(id));
     
     if (newReadyIds.length > 0) {
-      playNotificationSound('kitchenAlert');
+      // Call async function with catch to prevent unhandled rejection
+      playNotificationSound('kitchenAlert').catch(err => 
+        console.error('Error playing notification:', err)
+      );
     }
     
     prevReadyOrdersRef.current = readyOrderIds;

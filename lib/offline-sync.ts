@@ -155,6 +155,7 @@ export const createOfflineOrder = async (order: {
     createdAt: now,
     updatedAt: now,
     waiterId: order.waiterId,
+    isServed: false,
   };
 
   // Add to local store

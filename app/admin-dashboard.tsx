@@ -22,14 +22,20 @@ export default function AdminDashboardScreen() {
 
   const loadStats = useCallback(async () => {
     try {
-      // Fetch counts from Supabase
-      const [products, categories, tables, users, todayOrders] = await Promise.all([
+      // Fetch counts from Supabase with partial failure handling
+      const results = await Promise.allSettled([
         productService.getAll(),
         categoryService.getAll(),
         tableService.getAll(),
         userService.getAll(),
         orderService.getToday(),
       ]);
+      
+      const products = results[0].status === 'fulfilled' ? results[0].value : [];
+      const categories = results[1].status === 'fulfilled' ? results[1].value : [];
+      const tables = results[2].status === 'fulfilled' ? results[2].value : [];
+      const users = results[3].status === 'fulfilled' ? results[3].value : [];
+      const todayOrders = results[4].status === 'fulfilled' ? results[4].value : [];
       
       // Calculate today's revenue
       const todayRevenue = todayOrders
@@ -134,24 +140,44 @@ export default function AdminDashboardScreen() {
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       {/* Header */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-xs text-gray-500">Bienvenue</Text>
-            <Text className="text-xl font-bold text-gray-900">{user?.name || 'Admin'}</Text>
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={{ fontSize: 12, color: '#6B7280' }}>Bienvenue</Text>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: '#111827' }} numberOfLines={1}>{user?.name || 'Admin'}</Text>
           </View>
-          <View className="flex-row items-center gap-3">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TouchableOpacity
               onPress={onRefresh}
-              className="w-10 h-10 items-center justify-center"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                backgroundColor: '#F3F4F6',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
               <RefreshCw size={20} color="#3B82F6" />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleLogout}
-              className="w-10 h-10 items-center justify-center"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                backgroundColor: '#FEE2E2',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
               <LogOut size={20} color="#EF4444" />
             </TouchableOpacity>
@@ -161,67 +187,100 @@ export default function AdminDashboardScreen() {
 
       <ScrollView 
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3B82F6']} tintColor="#3B82F6" />
         }
       >
         {/* Stats Summary */}
-        <View className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
-          <Text className="text-sm font-semibold text-gray-900 mb-3">Aujourd&apos;hui</Text>
-          <View className="flex-row items-center justify-between">
-            <View>
-              <Text className="text-xs text-gray-500">Commandes</Text>
-              <Text className="text-2xl font-bold text-gray-900">{stats.todayOrders}</Text>
+        <View style={{
+          backgroundColor: '#FFFFFF',
+          borderWidth: 1,
+          borderColor: '#E5E7EB',
+          borderRadius: 12,
+          padding: 16,
+          marginBottom: 16,
+        }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 12 }}>Aujourd&apos;hui</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>Commandes</Text>
+              <Text style={{ fontSize: 28, fontWeight: '700', color: '#111827', marginTop: 2 }}>{stats.todayOrders}</Text>
             </View>
-            <View className="h-10 w-px bg-gray-200" />
-            <View>
-              <Text className="text-xs text-gray-500">Revenu</Text>
-              <Text className="text-2xl font-bold text-blue-600">{stats.todayRevenue} MAD</Text>
+            <View style={{ width: 1, height: 48, backgroundColor: '#E5E7EB' }} />
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>Revenu</Text>
+              <Text style={{ fontSize: 28, fontWeight: '700', color: '#3B82F6', marginTop: 2 }}>{stats.todayRevenue} MAD</Text>
             </View>
           </View>
         </View>
 
         {/* Menu Items */}
-        <View className="gap-3">
+        <View style={{ gap: 10 }}>
           {menuItems.map((item) => {
             const Icon = item.icon;
             return (
               <TouchableOpacity
                 key={item.id}
                 onPress={() => router.push(item.route as any)}
-                className="bg-white border border-gray-200 rounded-lg active:bg-gray-50"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 14,
+                }}
+                activeOpacity={0.7}
               >
-                <View className="flex-row items-center p-4">
-                  <View
-                    className="w-12 h-12 items-center justify-center rounded-lg mr-4"
-                    style={{ backgroundColor: `${item.color}15` }}
-                  >
-                    <Icon size={24} color={item.color} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-base font-semibold text-gray-900">{item.title}</Text>
-                    <Text className="text-xs text-gray-500 mt-1">{item.description}</Text>
-                  </View>
-                  <View className="items-end">
-                    <View
-                      className="px-3 py-1 rounded-full"
-                      style={{ backgroundColor: `${item.color}15` }}
-                    >
-                      <Text className="text-sm font-bold" style={{ color: item.color }}>
-                        {item.count}
-                      </Text>
-                    </View>
-                  </View>
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 14,
+                    backgroundColor: `${item.color}15`,
+                  }}
+                >
+                  <Icon size={24} color={item.color} />
                 </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>{item.title}</Text>
+                  <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{item.description}</Text>
+                </View>
+                {item.count !== undefined && (
+                  <View
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                      backgroundColor: `${item.color}15`,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: item.color }}>
+                      {item.count}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
         </View>
 
         {/* Quick Info */}
-        <View className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <Text className="text-xs font-semibold text-blue-900 mb-1">ADMINISTRATION</Text>
-          <Text className="text-xs text-blue-800">
+        <View style={{
+          marginTop: 20,
+          padding: 16,
+          backgroundColor: '#EFF6FF',
+          borderWidth: 1,
+          borderColor: '#DBEAFE',
+          borderRadius: 12,
+        }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: '#1E40AF', marginBottom: 4 }}>ADMINISTRATION</Text>
+          <Text style={{ fontSize: 13, color: '#1D4ED8', lineHeight: 18 }}>
             Gérez vos produits, catégories, tables et consultez les rapports quotidiens.
           </Text>
         </View>

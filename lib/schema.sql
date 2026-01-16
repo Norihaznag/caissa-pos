@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   pin VARCHAR(4) NOT NULL UNIQUE,
-  role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'waiter', 'kitchen')),
+  role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'waiter', 'kitchen', 'cashier')),
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS products (
   price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
   category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
   is_active BOOLEAN DEFAULT true,
+  image_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -68,6 +69,14 @@ CREATE TABLE IF NOT EXISTS orders (
   status VARCHAR(20) DEFAULT 'NEW' CHECK (status IN ('NEW', 'PREPARING', 'READY', 'PAID', 'CANCELLED')),
   is_served BOOLEAN DEFAULT false,
   total_amount DECIMAL(10, 2) DEFAULT 0,
+  payment_method VARCHAR(10) CHECK (payment_method IN ('cash', 'card')),
+  discount DECIMAL(10, 2) DEFAULT 0,
+  discount_type VARCHAR(10) CHECK (discount_type IN ('percent', 'amount')),
+  amount_received DECIMAL(10, 2),
+  change_amount DECIMAL(10, 2),
+  paid_at TIMESTAMP WITH TIME ZONE,
+  cancellation_reason TEXT,
+  cancelled_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -94,6 +103,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   product_name VARCHAR(100) NOT NULL,
   price DECIMAL(10, 2) NOT NULL,
   quantity INTEGER NOT NULL CHECK (quantity > 0),
+  note TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -130,7 +140,8 @@ CREATE POLICY "Allow all operations on order_items" ON order_items FOR ALL USING
 INSERT INTO users (name, pin, role) VALUES
   ('Admin', '1111', 'admin'),
   ('Serveur', '2222', 'waiter'),
-  ('Cuisine', '3333', 'kitchen')
+  ('Cuisine', '3333', 'kitchen'),
+  ('Caissier', '4444', 'cashier')
 ON CONFLICT (pin) DO NOTHING;
 
 -- Insert categories

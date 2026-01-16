@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Share, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Share, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Printer, Share2, Download, CheckCircle } from 'lucide-react-native';
@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAppStore } from '../lib/store';
 import { loadPrinterConfig, printReceipt, ReceiptData } from '../lib/printing';
+import { orderService, orderItemService, tableService, userService } from '../lib/services';
 
 interface ReceiptItem {
   name: string;
@@ -18,16 +19,62 @@ interface ReceiptItem {
 export default function ReceiptScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const orderId = params.orderId as string;
+  const orderId = params.orderId ? String(params.orderId) : '';
   
   const orders = useAppStore((state) => state.orders);
   const [receiptData, setReceiptData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      if (!orders || !Array.isArray(orders)) return;
-      const order = orders.find(o => o && o.id === orderId);
-      if (order) {
+    const loadReceiptData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // First try to find order in local store
+        let order = orders?.find(o => o && o.id === orderId);
+        
+        // If not found in store, fetch from Supabase
+        if (!order) {
+          const orderDb = await orderService.getById(orderId);
+          if (orderDb) {
+            const itemsDb = await orderItemService.getByOrderId(orderId);
+            const tablesDb = await tableService.getAll();
+            const usersDb = await userService.getAll();
+            
+            const table = tablesDb.find(t => t.id === orderDb.table_id);
+            const waiter = usersDb.find(u => u.id === orderDb.waiter_id);
+            
+            order = {
+              id: orderDb.id,
+              tableId: orderDb.table_id,
+              tableNumber: table?.number || 0,
+              items: itemsDb.map(i => ({
+                id: i.id,
+                productId: i.product_id,
+                productName: i.product_name,
+                price: i.price,
+                quantity: i.quantity,
+              })),
+              status: orderDb.status as any,
+              isServed: orderDb.is_served,
+              totalAmount: orderDb.total_amount,
+              createdAt: orderDb.created_at ? new Date(orderDb.created_at) : new Date(),
+              updatedAt: orderDb.updated_at ? new Date(orderDb.updated_at) : new Date(),
+              waiterId: orderDb.waiter_id || undefined,
+              waiterName: waiter?.name || 'Serveur',
+              paymentMethod: orderDb.payment_method as 'cash' | 'card' | undefined,
+            };
+          }
+        }
+        
+        if (!order) {
+          setError('Commande introuvable');
+          setLoading(false);
+          return;
+        }
+        
         const orderItems = Array.isArray(order.items) ? order.items : [];
         const items: ReceiptItem[] = orderItems.map(item => ({
           name: item?.productName || 'Produit',
@@ -36,37 +83,57 @@ export default function ReceiptScreen() {
           total: (Number(item?.price) || 0) * (Number(item?.quantity) || 1)
         }));
 
-      setReceiptData({
-        restaurantName: 'Café Marocain',
-        address: '123 Avenue Mohammed V',
-        city: 'Casablanca, Maroc',
-        phone: '+212 5XX-XXXXXX',
-        taxId: 'IF: 12345678',
-        orderId: order.id,
-        tableNumber: order.tableNumber,
-        waiterName: order.waiterName || 'Ahmed',
-        date: order.paidAt || order.createdAt,
-        items,
-        subtotal: order.totalAmount + (order.discount || 0),
-        discount: order.discount || 0,
-        discountPercent: order.discountType === 'percent' ? order.discount : 0,
-        tax: 0,
-        total: order.totalAmount,
-        paymentMethod: order.paymentMethod === 'cash' ? 'Espèces' : 'Carte',
-        amountReceived: 0, // TODO: Store this
-        change: 0,
-        isPaid: order.status === 'PAID',
-      });
+        setReceiptData({
+          restaurantName: 'Café Marocain',
+          address: '123 Avenue Mohammed V',
+          city: 'Casablanca, Maroc',
+          phone: '+212 5XX-XXXXXX',
+          taxId: 'IF: 12345678',
+          orderId: order.id,
+          tableNumber: order.tableNumber,
+          waiterName: order.waiterName || 'Serveur',
+          date: order.paidAt || order.createdAt,
+          items,
+          subtotal: order.totalAmount + (order.discount || 0),
+          discount: order.discount || 0,
+          discountPercent: order.discountType === 'percent' ? order.discount : 0,
+          tax: 0,
+          total: order.totalAmount,
+          paymentMethod: order.paymentMethod === 'cash' ? 'Espèces' : 'Carte',
+          amountReceived: order.amountReceived || order.totalAmount,
+          change: order.change || 0,
+          isPaid: order.status === 'PAID',
+        });
+      } catch (err) {
+        console.error('Error loading receipt data:', err);
+        setError('Erreur lors du chargement');
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading receipt data:', error);
-    }
+    };
+    
+    loadReceiptData();
   }, [orderId, orders]);
 
-  if (!receiptData) {
+  if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-white items-center justify-center">
-        <Text className="text-gray-500">Chargement...</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={{ color: '#6B7280', marginTop: 12 }}>Chargement...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !receiptData) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#EF4444', fontSize: 16 }}>{error || 'Erreur inconnue'}</Text>
+        <TouchableOpacity 
+          onPress={() => router.back()}
+          style={{ marginTop: 16, padding: 12, backgroundColor: '#3B82F6', borderRadius: 8 }}
+        >
+          <Text style={{ color: '#FFFFFF' }}>Retour</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -183,33 +250,60 @@ export default function ReceiptScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F4F6' }}>
       {/* Header */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <TouchableOpacity
               onPress={() => router.back()}
-              className="w-10 h-10 items-center justify-center bg-gray-100 rounded-lg"
+              style={{
+                width: 40,
+                height: 40,
+                backgroundColor: '#F3F4F6',
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
               <ArrowLeft size={20} color="#374151" />
             </TouchableOpacity>
             <View>
-              <Text className="text-xl font-bold text-gray-900">Reçu / Ticket</Text>
-              <Text className="text-sm text-gray-500">Table {receiptData.tableNumber}</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Reçu / Ticket</Text>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>Table {receiptData.tableNumber}</Text>
             </View>
           </View>
           
-          <View className="flex-row gap-2">
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
               onPress={handleShare}
-              className="w-10 h-10 items-center justify-center bg-blue-100 rounded-lg"
+              style={{
+                width: 40,
+                height: 40,
+                backgroundColor: '#DBEAFE',
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
               <Share2 size={20} color="#3B82F6" />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handlePrint}
-              className="w-10 h-10 items-center justify-center bg-green-100 rounded-lg"
+              style={{
+                width: 40,
+                height: 40,
+                backgroundColor: '#DCFCE7',
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
               <Printer size={20} color="#22C55E" />
             </TouchableOpacity>
@@ -217,104 +311,113 @@ export default function ReceiptScreen() {
         </View>
       </View>
 
-      <ScrollView className="flex-1 p-4">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
         {/* Receipt Card */}
-        <View className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <View style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: 12,
+          overflow: 'hidden',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+          elevation: 2,
+        }}>
           {/* Header */}
-          <View className="bg-gray-900 py-6 px-4">
-            <Text className="text-white text-2xl font-bold text-center">
+          <View style={{ backgroundColor: '#111827', paddingVertical: 24, paddingHorizontal: 16 }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '700', textAlign: 'center' }}>
               {receiptData.restaurantName}
             </Text>
-            <Text className="text-gray-300 text-center mt-1">{receiptData.address}</Text>
-            <Text className="text-gray-300 text-center">{receiptData.city}</Text>
-            <Text className="text-gray-400 text-center text-sm mt-2">{receiptData.phone}</Text>
+            <Text style={{ color: '#9CA3AF', textAlign: 'center', marginTop: 4, fontSize: 14 }}>{receiptData.address}</Text>
+            <Text style={{ color: '#9CA3AF', textAlign: 'center', fontSize: 14 }}>{receiptData.city}</Text>
+            <Text style={{ color: '#6B7280', textAlign: 'center', fontSize: 13, marginTop: 8 }}>{receiptData.phone}</Text>
           </View>
 
           {/* Order Info */}
-          <View className="px-4 py-3 border-b border-dashed border-gray-300">
-            <View className="flex-row justify-between">
-              <Text className="text-gray-500">Ticket N°</Text>
-              <Text className="font-mono text-gray-900">{receiptData.orderId}</Text>
+          <View style={{ paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: '#D1D5DB' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ color: '#6B7280', fontSize: 14 }}>Ticket N°</Text>
+              <Text style={{ fontFamily: 'monospace', color: '#111827', fontSize: 14 }}>{receiptData.orderId}</Text>
             </View>
-            <View className="flex-row justify-between mt-1">
-              <Text className="text-gray-500">Table</Text>
-              <Text className="font-bold text-gray-900">{receiptData.tableNumber}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+              <Text style={{ color: '#6B7280', fontSize: 14 }}>Table</Text>
+              <Text style={{ fontWeight: '700', color: '#111827', fontSize: 14 }}>{receiptData.tableNumber}</Text>
             </View>
-            <View className="flex-row justify-between mt-1">
-              <Text className="text-gray-500">Serveur</Text>
-              <Text className="text-gray-900">{receiptData.waiterName}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+              <Text style={{ color: '#6B7280', fontSize: 14 }}>Serveur</Text>
+              <Text style={{ color: '#111827', fontSize: 14 }}>{receiptData.waiterName}</Text>
             </View>
-            <View className="flex-row justify-between mt-1">
-              <Text className="text-gray-500">Date</Text>
-              <Text className="text-gray-900">{currentDate}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+              <Text style={{ color: '#6B7280', fontSize: 14 }}>Date</Text>
+              <Text style={{ color: '#111827', fontSize: 14 }}>{currentDate}</Text>
             </View>
           </View>
 
           {/* Items */}
-          <View className="px-4 py-3 border-b border-dashed border-gray-300">
-            <Text className="text-xs text-gray-500 mb-2 font-semibold">ARTICLES</Text>
+          <View style={{ paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: '#D1D5DB' }}>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8, fontWeight: '600' }}>ARTICLES</Text>
             {receiptData.items.map((item, index) => (
-              <View key={index} className="flex-row justify-between items-center py-2">
-                <View className="flex-row items-center gap-2 flex-1">
-                  <Text className="text-gray-500 w-6">{item.quantity}x</Text>
-                  <Text className="text-gray-900 flex-1">{item.name}</Text>
+              <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <Text style={{ color: '#6B7280', width: 28, fontSize: 14 }}>{item.quantity}x</Text>
+                  <Text style={{ color: '#111827', flex: 1, fontSize: 14 }}>{item.name}</Text>
                 </View>
-                <Text className="font-medium text-gray-900">{item.total} MAD</Text>
+                <Text style={{ fontWeight: '500', color: '#111827', fontSize: 14 }}>{item.total} MAD</Text>
               </View>
             ))}
           </View>
 
           {/* Totals */}
-          <View className="px-4 py-3">
-            <View className="flex-row justify-between items-center">
-              <Text className="text-gray-500">Sous-total</Text>
-              <Text className="text-gray-900">{receiptData.subtotal} MAD</Text>
+          <View style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: '#6B7280', fontSize: 14 }}>Sous-total</Text>
+              <Text style={{ color: '#111827', fontSize: 14 }}>{receiptData.subtotal} MAD</Text>
             </View>
             {receiptData.discount > 0 && (
-              <View className="flex-row justify-between items-center mt-1">
-                <Text className="text-green-600">Remise ({receiptData.discountPercent}%)</Text>
-                <Text className="text-green-600">-{receiptData.discount} MAD</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                <Text style={{ color: '#22C55E', fontSize: 14 }}>Remise ({receiptData.discountPercent}%)</Text>
+                <Text style={{ color: '#22C55E', fontSize: 14 }}>-{receiptData.discount} MAD</Text>
               </View>
             )}
-            <View className="flex-row justify-between items-center mt-3 pt-3 border-t border-gray-200">
-              <Text className="text-lg font-bold text-gray-900">TOTAL</Text>
-              <Text className="text-2xl font-bold text-gray-900">{receiptData.total} MAD</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#E5E7EB' }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#111827' }}>TOTAL</Text>
+              <Text style={{ fontSize: 24, fontWeight: '700', color: '#111827' }}>{receiptData.total} MAD</Text>
             </View>
           </View>
 
           {/* Payment Info */}
-          <View className="mx-4 mb-4 p-3 bg-green-50 rounded-lg">
-            <View className="flex-row items-center justify-center gap-2 mb-2">
+          <View style={{ marginHorizontal: 16, marginBottom: 16, padding: 14, backgroundColor: '#F0FDF4', borderRadius: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 }}>
               <CheckCircle size={18} color="#22C55E" />
-              <Text className="font-semibold text-green-700">PAYÉ</Text>
+              <Text style={{ fontWeight: '600', color: '#15803D', fontSize: 15 }}>PAYÉ</Text>
             </View>
-            <View className="flex-row justify-between">
-              <Text className="text-green-600">Mode</Text>
-              <Text className="text-green-700 font-medium">{receiptData.paymentMethod}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ color: '#22C55E', fontSize: 14 }}>Mode</Text>
+              <Text style={{ color: '#15803D', fontWeight: '500', fontSize: 14 }}>{receiptData.paymentMethod}</Text>
             </View>
             {receiptData.paymentMethod === 'Espèces' && (
               <>
-                <View className="flex-row justify-between mt-1">
-                  <Text className="text-green-600">Reçu</Text>
-                  <Text className="text-green-700">{receiptData.amountReceived} MAD</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                  <Text style={{ color: '#22C55E', fontSize: 14 }}>Reçu</Text>
+                  <Text style={{ color: '#15803D', fontSize: 14 }}>{receiptData.amountReceived} MAD</Text>
                 </View>
-                <View className="flex-row justify-between mt-1">
-                  <Text className="text-green-600">Rendu</Text>
-                  <Text className="text-green-700 font-medium">{receiptData.change} MAD</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                  <Text style={{ color: '#22C55E', fontSize: 14 }}>Rendu</Text>
+                  <Text style={{ color: '#15803D', fontWeight: '500', fontSize: 14 }}>{receiptData.change} MAD</Text>
                 </View>
               </>
             )}
           </View>
 
           {/* Footer */}
-          <View className="bg-gray-50 py-4 px-4">
-            <Text className="text-center text-gray-600 font-medium">
+          <View style={{ backgroundColor: '#F9FAFB', paddingVertical: 16, paddingHorizontal: 16 }}>
+            <Text style={{ textAlign: 'center', color: '#374151', fontWeight: '500', fontSize: 15 }}>
               Merci de votre visite!
             </Text>
-            <Text className="text-center text-gray-500 text-lg mt-1">
+            <Text style={{ textAlign: 'center', color: '#6B7280', fontSize: 18, marginTop: 4 }}>
               شكرا لزيارتكم
             </Text>
-            <Text className="text-center text-xs text-gray-400 mt-3">
+            <Text style={{ textAlign: 'center', fontSize: 12, color: '#9CA3AF', marginTop: 12 }}>
               {receiptData.taxId}
             </Text>
           </View>
@@ -322,20 +425,47 @@ export default function ReceiptScreen() {
       </ScrollView>
 
       {/* Bottom Actions */}
-      <View className="p-4 bg-white border-t border-gray-200 flex-row gap-3">
+      <View style={{
+        padding: 16,
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+        flexDirection: 'row',
+        gap: 12,
+      }}>
         <TouchableOpacity
           onPress={handleShare}
-          className="flex-1 flex-row items-center justify-center gap-2 py-4 bg-blue-500 rounded-lg"
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            paddingVertical: 14,
+            backgroundColor: '#3B82F6',
+            borderRadius: 10,
+          }}
+          activeOpacity={0.8}
         >
           <Share2 size={20} color="#FFFFFF" />
-          <Text className="text-white font-semibold">Partager</Text>
+          <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 15 }}>Partager</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={handlePrint}
-          className="flex-1 flex-row items-center justify-center gap-2 py-4 bg-green-500 rounded-lg"
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            paddingVertical: 14,
+            backgroundColor: '#22C55E',
+            borderRadius: 10,
+          }}
+          activeOpacity={0.8}
         >
           <Printer size={20} color="#FFFFFF" />
-          <Text className="text-white font-semibold">Imprimer</Text>
+          <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 15 }}>Imprimer</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
