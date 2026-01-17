@@ -13,6 +13,7 @@ import {
   Image,
   Platform,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import {
   X,
   Package,
@@ -65,8 +66,9 @@ import {
   saveReceiptDesign,
   type ReceiptDesign,
   BluetoothPrinterService,
+  UnifiedPrinterService,
 } from '../lib/printing';
-import BluetoothPrinterModal from './BluetoothPrinterModal';
+import UnifiedPrinterModal from './UnifiedPrinterModal';
 
 interface AdminPanelProps {
   visible: boolean;
@@ -96,6 +98,7 @@ interface Product {
 }
 
 export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPanelProps) {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   
@@ -1479,6 +1482,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               backgroundColor: colors.primaryLight,
               borderRadius: borderRadius.lg,
               gap: spacing.md,
+              marginBottom: spacing.md,
             }}
           >
             <Printer size={20} color={colors.primary} />
@@ -1488,6 +1492,32 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               </Text>
               <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>
                 Logo, texte, taille de papier...
+              </Text>
+            </View>
+          </TouchableOpacity>
+          
+          {/* Printer Test Button */}
+          <TouchableOpacity
+            onPress={() => {
+              onClose();
+              setTimeout(() => router.push('/printer-test' as any), 300);
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: spacing.md,
+              backgroundColor: '#7C3AED',
+              borderRadius: borderRadius.lg,
+              gap: spacing.md,
+            }}
+          >
+            <Zap size={20} color={colors.white} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: fontSize.sm, color: colors.white, fontWeight: '600' }}>
+                🔧 Test Avancé Imprimante
+              </Text>
+              <Text style={{ fontSize: fontSize.xs, color: 'rgba(255,255,255,0.8)' }}>
+                USB, Bluetooth, WiFi - Test complet
               </Text>
             </View>
           </TouchableOpacity>
@@ -2006,8 +2036,8 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           </View>
         </Modal>
 
-        {/* Bluetooth Printer Modal - Professional POS Connection UI */}
-        <BluetoothPrinterModal
+        {/* Unified Printer Modal - Professional Multi-Protocol Connection UI */}
+        <UnifiedPrinterModal
           visible={showBluetoothModal}
           onClose={() => setShowBluetoothModal(false)}
           onConnected={(device) => {

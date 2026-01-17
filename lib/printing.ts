@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Platform, PermissionsAndroid, Linking, NativeModules, NativeEventEmitter } from 'react-native';
 import BluetoothPrinterService from './BluetoothPrinterService';
 import UnifiedPrinterService, { PrinterDevice, PrinterType as UnifiedPrinterType } from './UnifiedPrinterService';
+import { thermalPrinterService, ReceiptData as ThermalReceiptData } from './ThermalPrinterService';
 
 // Storage keys
 const PRINTER_CONFIG_KEY = 'pos_printer_config';
@@ -1004,6 +1005,73 @@ export const quickPrintReceipt = async (receiptData: ReceiptData): Promise<boole
 };
 
 // ============================================================================
+// NATIVE THERMAL PRINTER SERVICE - Direct Printing via Kotlin Module
+// ============================================================================
+
+/**
+ * Print using the native ThermalPrinterService (USB/Bluetooth/WiFi)
+ * This uses the Kotlin native module for direct hardware access
+ */
+export const printWithNativeService = async (receiptData: ReceiptData): Promise<boolean> => {
+  try {
+    // Check if native service is available and connected
+    const status = await thermalPrinterService.getConnectionStatus();
+    
+    if (!status.isConnected) {
+      console.log('Native printer not connected, falling back to legacy service');
+      return false;
+    }
+    
+    // Convert ReceiptData to ThermalReceiptData format
+    const thermalData: ThermalReceiptData = {
+      header: receiptData.restaurantName,
+      subheader: receiptData.address ? `${receiptData.address}, ${receiptData.city}` : receiptData.city,
+      items: receiptData.items.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+      })),
+      subtotal: receiptData.subtotal,
+      tax: receiptData.tax,
+      discount: receiptData.discount,
+      total: receiptData.total,
+      footer: receiptData.footerMessage,
+      date: `${receiptData.date} ${receiptData.time}`,
+    };
+    
+    return await thermalPrinterService.printReceipt(thermalData);
+  } catch (error) {
+    console.error('Native print error:', error);
+    return false;
+  }
+};
+
+/**
+ * Test print using native service
+ */
+export const testPrintNative = async (): Promise<boolean> => {
+  try {
+    return await thermalPrinterService.printTestPage();
+  } catch (error) {
+    console.error('Native test print error:', error);
+    return false;
+  }
+};
+
+/**
+ * Open cash drawer using native service
+ */
+export const openCashDrawerNative = async (): Promise<boolean> => {
+  try {
+    return await thermalPrinterService.openCashDrawer();
+  } catch (error) {
+    console.error('Native cash drawer error:', error);
+    return false;
+  }
+};
+
+// ============================================================================
 // UNIFIED PRINTER SERVICE - Direct Access for new UI
 // ============================================================================
 
@@ -1014,3 +1082,9 @@ export { UnifiedPrinterService };
 // ============================================================================
 
 export { BluetoothPrinterService };
+
+// ============================================================================
+// NATIVE THERMAL PRINTER SERVICE EXPORT
+// ============================================================================
+
+export { thermalPrinterService };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, FlatList, ScrollView, Alert, TextInput, ActivityIndicator, useWindowDimensions, Modal, Platform, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { 
   LogOut, 
@@ -58,10 +59,10 @@ import {
   OfflineOrderItem,
   clearInvalidSyncQueueItems,
 } from '../lib/offline-db';
-import { loadPrinterConfig, printReceipt, ReceiptData, printDailyReport, DailyReportData, BluetoothPrinterService, quickPrintReceipt } from '../lib/printing';
+import { loadPrinterConfig, printReceipt, ReceiptData, printDailyReport, DailyReportData, BluetoothPrinterService, quickPrintReceipt, UnifiedPrinterService } from '../lib/printing';
 import { hasPermission, type UserRole } from '../lib/permissions';
 import AdminPanel from '../components/AdminPanel';
-import BluetoothPrinterModal from '../components/BluetoothPrinterModal';
+import UnifiedPrinterModal from '../components/UnifiedPrinterModal';
 
 // Types
 interface CartItem {
@@ -280,9 +281,14 @@ export default function CashierSimpleScreen() {
         await loadAllStockProducts();
         await loadTodayExpenses();
         
-        // Check printer connection status
-        const printerStatus = BluetoothPrinterService.getConnectionStatus();
-        setPrinterConnected(printerStatus.isConnected);
+        // Check printer connection status (try UnifiedPrinterService first, fallback to Bluetooth)
+        const unifiedStatus = UnifiedPrinterService.getConnectionStatus();
+        if (unifiedStatus.isConnected) {
+          setPrinterConnected(true);
+        } else {
+          const printerStatus = BluetoothPrinterService.getConnectionStatus();
+          setPrinterConnected(printerStatus.isConnected);
+        }
         
       } catch (error) {
         console.error('Init error:', error);
@@ -294,9 +300,16 @@ export default function CashierSimpleScreen() {
     
     init();
     
-    // Subscribe to printer connection status
-    const unsubscribePrinter = BluetoothPrinterService.onConnectionStatusChange((status) => {
+    // Subscribe to printer connection status (both services)
+    const unsubscribeUnified = UnifiedPrinterService.onConnectionStatusChange((status) => {
       setPrinterConnected(status === 'connected');
+    });
+    
+    const unsubscribeBluetooth = BluetoothPrinterService.onConnectionStatusChange((status) => {
+      // Only update if unified is not connected
+      if (!UnifiedPrinterService.isConnected()) {
+        setPrinterConnected(status === 'connected');
+      }
     });
     
     // Refresh pending orders periodically (no network check)
@@ -306,7 +319,8 @@ export default function CashierSimpleScreen() {
     
     return () => {
       clearInterval(interval);
-      unsubscribePrinter();
+      unsubscribeUnified();
+      unsubscribeBluetooth();
     };
   }, []);
 
@@ -1011,12 +1025,19 @@ export default function CashierSimpleScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header - Facebook Lite Style */}
+      {/* Header - Facebook Lite Style (Clean White) */}
       <View style={{ 
-        backgroundColor: colors.primary,
+        backgroundColor: '#FFFFFF',
         paddingBottom: spacing.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E4E6EB',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
       }}>
-        {/* Top Row - Logo, Search-like area, and Actions */}
+        {/* Top Row - Logo and Actions */}
         <View style={{ 
           flexDirection: 'row', 
           alignItems: 'center', 
@@ -1026,53 +1047,57 @@ export default function CashierSimpleScreen() {
           paddingBottom: spacing.xs,
         }}>
           {/* Left - Logo & Brand */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
             <View style={{
-              width: isPhone ? 40 : 48,
-              height: isPhone ? 40 : 48,
-              borderRadius: borderRadius.lg,
-              backgroundColor: 'rgba(255,255,255,0.2)',
+              width: isPhone ? 36 : 42,
+              height: isPhone ? 36 : 42,
+              borderRadius: 10,
+              backgroundColor: colors.primary,
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <Coffee size={ui.iconMd} color={colors.white} />
+              <Coffee size={isPhone ? 20 : 24} color="#FFFFFF" />
             </View>
-            <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: colors.white }}>
+            <Text style={{ 
+              fontSize: isPhone ? 20 : 24, 
+              fontWeight: '700', 
+              color: colors.primary,
+            }}>
               CaissaPro
             </Text>
           </View>
           
           {/* Right - Action Icons */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-            {/* Stock - visible to all but manage requires permission */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {/* Stock */}
             {hasPermission(user?.role as UserRole, 'view_stock') && (
               <TouchableOpacity
                 onPress={() => setShowStockModal(true)}
                 style={{ 
-                  width: ui.iconBtn, 
-                  height: ui.iconBtn, 
-                  borderRadius: ui.iconBtn / 2, 
+                  width: 36, 
+                  height: 36, 
+                  borderRadius: 18, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  backgroundColor: '#F0F2F5',
                   position: 'relative',
                 }}
               >
-                <Package size={ui.iconMd} color={colors.white} />
+                <Package size={20} color="#1C1E21" />
                 {lowStockProducts.length > 0 && (
                   <View style={{
                     position: 'absolute',
                     top: -2,
                     right: -2,
-                    minWidth: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: colors.error,
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: '#FA383E',
                     alignItems: 'center',
                     justifyContent: 'center',
                     paddingHorizontal: 4,
                   }}>
-                    <Text style={{ fontSize: ui.text.xs, color: colors.white, fontWeight: '700' }}>
+                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '700' }}>
                       {lowStockProducts.length > 9 ? '9+' : lowStockProducts.length}
                     </Text>
                   </View>
@@ -1080,20 +1105,20 @@ export default function CashierSimpleScreen() {
               </TouchableOpacity>
             )}
             
-            {/* Expenses - Admin only */}
+            {/* Expenses */}
             {hasPermission(user?.role as UserRole, 'manage_expenses') && (
               <TouchableOpacity
                 onPress={() => setShowExpensesModal(true)}
                 style={{ 
-                  width: ui.iconBtn, 
-                  height: ui.iconBtn, 
-                  borderRadius: ui.iconBtn / 2, 
+                  width: 36, 
+                  height: 36, 
+                  borderRadius: 18, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  backgroundColor: '#F0F2F5',
                 }}
               >
-                <Wallet size={ui.iconMd} color={colors.white} />
+                <Wallet size={20} color="#1C1E21" />
               </TouchableOpacity>
             )}
             
@@ -1101,65 +1126,65 @@ export default function CashierSimpleScreen() {
             <TouchableOpacity
               onPress={() => setShowNotificationPanel(true)}
               style={{ 
-                width: ui.iconBtn, 
-                height: ui.iconBtn, 
-                borderRadius: ui.iconBtn / 2, 
+                width: 36, 
+                height: 36, 
+                borderRadius: 18, 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                backgroundColor: 'rgba(255,255,255,0.15)',
+                backgroundColor: '#F0F2F5',
                 position: 'relative',
               }}
             >
-              <Bell size={ui.iconMd} color={colors.white} />
+              <Bell size={20} color="#1C1E21" />
               {notifications.length > 0 && (
                 <View style={{
                   position: 'absolute',
                   top: -2,
                   right: -2,
-                  minWidth: 20,
-                  height: 20,
-                  borderRadius: 10,
-                  backgroundColor: colors.error,
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: '#FA383E',
                   alignItems: 'center',
                   justifyContent: 'center',
                   paddingHorizontal: 4,
                 }}>
-                  <Text style={{ fontSize: ui.text.xs, color: colors.white, fontWeight: '700' }}>
+                  <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '700' }}>
                     {notifications.length > 9 ? '9+' : notifications.length}
                   </Text>
                 </View>
               )}
             </TouchableOpacity>
             
-            {/* Orders Tracking */}
+            {/* Orders */}
             {hasPermission(user?.role as UserRole, 'view_all_orders') && (
               <TouchableOpacity
                 onPress={() => setShowOrdersModal(true)}
                 style={{ 
-                  width: ui.iconBtn, 
-                  height: ui.iconBtn, 
-                  borderRadius: ui.iconBtn / 2, 
+                  width: 36, 
+                  height: 36, 
+                  borderRadius: 18, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  backgroundColor: '#F0F2F5',
                   position: 'relative',
                 }}
               >
-                <ClipboardList size={ui.iconMd} color={colors.white} />
+                <ClipboardList size={20} color="#1C1E21" />
                 {todayOrders.length > 0 && (
                   <View style={{
                     position: 'absolute',
                     top: -2,
                     right: -2,
-                    minWidth: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: colors.success,
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: '#31A24C',
                     alignItems: 'center',
                     justifyContent: 'center',
                     paddingHorizontal: 4,
                   }}>
-                    <Text style={{ fontSize: ui.text.xs, color: colors.white, fontWeight: '700' }}>
+                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '700' }}>
                       {todayOrders.length > 99 ? '99+' : todayOrders.length}
                     </Text>
                   </View>
@@ -1167,110 +1192,130 @@ export default function CashierSimpleScreen() {
               </TouchableOpacity>
             )}
             
-            {/* Report - only for users with permission */}
+            {/* Report */}
             {hasPermission(user?.role as UserRole, 'view_daily_report') && (
               <TouchableOpacity
                 onPress={() => setShowReportModal(true)}
-                style={{ width: ui.iconBtn, height: ui.iconBtn, borderRadius: ui.iconBtn / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)' }}
+                style={{ 
+                  width: 36, 
+                  height: 36, 
+                  borderRadius: 18, 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  backgroundColor: '#F0F2F5',
+                }}
               >
-                <BarChart3 size={ui.iconMd} color={colors.white} />
+                <BarChart3 size={20} color="#1C1E21" />
               </TouchableOpacity>
             )}
             
-            {/* Settings - Admin only */}
+            {/* Settings */}
             {hasPermission(user?.role as UserRole, 'access_admin_panel') && (
               <TouchableOpacity
                 onPress={() => setShowAdminPanel(true)}
-                style={{ width: ui.iconBtn, height: ui.iconBtn, borderRadius: ui.iconBtn / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)' }}
+                style={{ 
+                  width: 36, 
+                  height: 36, 
+                  borderRadius: 18, 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  backgroundColor: '#F0F2F5',
+                }}
               >
-                <Settings size={ui.iconMd} color={colors.white} />
+                <Settings size={20} color="#1C1E21" />
               </TouchableOpacity>
             )}
             
-            {/* Printer Status Indicator */}
+            {/* Printer Status */}
             <TouchableOpacity
               onPress={() => setShowPrinterModal(true)}
               style={{ 
-                width: ui.iconBtn, 
-                height: ui.iconBtn, 
-                borderRadius: ui.iconBtn / 2, 
+                width: 36, 
+                height: 36, 
+                borderRadius: 18, 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                backgroundColor: printerConnected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.15)',
-                borderWidth: printerConnected ? 2 : 0,
-                borderColor: printerConnected ? '#10B981' : 'transparent',
+                backgroundColor: printerConnected ? '#E7F3E9' : '#F0F2F5',
               }}
             >
               {printerConnected ? (
-                <BluetoothConnected size={ui.iconMd} color="#10B981" />
+                <BluetoothConnected size={20} color="#31A24C" />
               ) : (
-                <Bluetooth size={ui.iconMd} color={colors.white} />
+                <Bluetooth size={20} color="#1C1E21" />
               )}
             </TouchableOpacity>
             
             {/* Logout */}
             <TouchableOpacity
               onPress={handleLogout}
-              style={{ width: ui.iconBtn, height: ui.iconBtn, borderRadius: ui.iconBtn / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)' }}
+              style={{ 
+                width: 36, 
+                height: 36, 
+                borderRadius: 18, 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                backgroundColor: '#FFEBE9',
+              }}
             >
-              <LogOut size={ui.iconMd} color={colors.white} />
+              <LogOut size={20} color="#FA383E" />
             </TouchableOpacity>
           </View>
         </View>
         
-        {/* Stats Bar - Revenue & Quick Actions */}
+        {/* Stats Bar - Clean Minimal */}
         <View style={{ 
           flexDirection: 'row', 
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: spacing.md,
-          paddingTop: spacing.sm,
+          paddingTop: spacing.xs,
         }}>
           {/* Daily Stats */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-            <View>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.md }}>
-                <Text style={{ fontSize: fontSize.xxl, fontWeight: '700', color: colors.white }}>
-                  {Math.round(dailyStats.totalRevenue)} DH
-                </Text>
-                {todayExpenseTotal > 0 && (
-                  <Text style={{ 
-                    fontSize: fontSize.md, 
-                    fontWeight: '600', 
-                    color: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? '#86EFAC' : '#FCA5A5',
-                  }}>
-                    (Net: {Math.round(dailyStats.totalRevenue - todayExpenseTotal)} DH)
-                  </Text>
-                )}
-              </View>
-              <Text style={{ fontSize: fontSize.xs, color: 'rgba(255,255,255,0.7)' }}>
-                {dailyStats.paidOrders} commandes • {todayExpenseTotal > 0 ? `${Math.round(todayExpenseTotal)} DH dépenses` : 'Aucune dépense'}
-                {lowStockProducts.length > 0 && ` • ⚠️ ${lowStockProducts.length} stock${lowStockProducts.length > 1 ? 's' : ''} bas`}
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
+              <Text style={{ 
+                fontSize: fontSize.xxl, 
+                fontWeight: '700', 
+                color: '#1C1E21',
+              }}>
+                {Math.round(dailyStats.totalRevenue)} DH
               </Text>
+              {todayExpenseTotal > 0 && (
+                <Text style={{ 
+                  fontSize: fontSize.sm, 
+                  fontWeight: '600', 
+                  color: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? '#31A24C' : '#FA383E',
+                }}>
+                  Net: {Math.round(dailyStats.totalRevenue - todayExpenseTotal)} DH
+                </Text>
+              )}
             </View>
+            <Text style={{ fontSize: fontSize.xs, color: '#65676B' }}>
+              {dailyStats.paidOrders} commandes • {todayExpenseTotal > 0 ? `${Math.round(todayExpenseTotal)} DH dépenses` : 'Aucune dépense'}
+              {lowStockProducts.length > 0 && ` • ⚠️ ${lowStockProducts.length} stock bas`}
+            </Text>
           </View>
           
-          {/* Quick Action Buttons */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            {/* Pending Orders */}
-            {pendingOrders.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setShowPendingModal(true)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: colors.warning,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.sm,
-                  borderRadius: borderRadius.full,
-                  gap: spacing.xs,
-                }}
-              >
-                <Pause size={14} color={colors.white} />
-                <Text style={{ fontSize: fontSize.sm, color: colors.white, fontWeight: '700' }}>{pendingOrders.length}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          {/* Pending Orders Badge */}
+          {pendingOrders.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setShowPendingModal(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#FFF4E5',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 16,
+                gap: 6,
+              }}
+            >
+              <Pause size={14} color="#E8851F" />
+              <Text style={{ fontSize: 13, color: '#E8851F', fontWeight: '600' }}>
+                {pendingOrders.length} en attente
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -3643,8 +3688,8 @@ export default function CashierSimpleScreen() {
         onDataChanged={refreshAllData}
       />
 
-      {/* Bluetooth Printer Modal - Quick Connect */}
-      <BluetoothPrinterModal
+      {/* Unified Printer Modal - Bluetooth/WiFi/USB */}
+      <UnifiedPrinterModal
         visible={showPrinterModal}
         onClose={() => setShowPrinterModal(false)}
         onConnected={(device) => {

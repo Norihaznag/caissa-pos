@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Printer, Bluetooth, Wifi, Usb, Check, RefreshCw } from 'lucide-react-native';
+import { ArrowLeft, Printer, Bluetooth, Wifi, Usb, Check, RefreshCw, Settings } from 'lucide-react-native';
 import { 
   PrinterConfig, 
   PrinterType, 
@@ -437,6 +437,26 @@ export default function PrinterSettingsScreen() {
             </TouchableOpacity>
           </>
         )}
+
+        {/* Advanced Printer Test - Native Module */}
+        <TouchableOpacity
+          onPress={() => router.push('/printer-test' as any)}
+          style={{
+            backgroundColor: '#7C3AED',
+            paddingVertical: 16,
+            borderRadius: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
+          <Settings size={20} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 15 }}>
+            Test Avancé (USB / Bluetooth / WiFi)
+          </Text>
+        </TouchableOpacity>
 
         {/* Help Section */}
         <View style={{

@@ -220,7 +220,7 @@ class UnifiedPrinterServiceClass {
   
   // Active WiFi socket
   private wifiSocket: any = null;
-  private wifiTimeout: NodeJS.Timeout | null = null;
+  private wifiTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // ============================================================================
   // INITIALIZATION

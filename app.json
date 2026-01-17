@@ -2,7 +2,7 @@
   "expo": {
     "name": "CaissaPro",
     "slug": "caissa-pro",
-    "version": "2.1.0",
+    "version": "2.1.2",
     "description": "Système de caisse moderne et intuitif pour restaurants et cafés. Gérez vos tables, commandes, paiements et rapports en toute simplicité.",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.caissapro.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#3B82F6",
         "foregroundImage": "./assets/images/adaptive-icon.png"
