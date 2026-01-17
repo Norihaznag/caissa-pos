@@ -1,12 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Platform, PermissionsAndroid, Linking, NativeModules, NativeEventEmitter } from 'react-native';
+import BluetoothPrinterService from './BluetoothPrinterService';
+import UnifiedPrinterService, { PrinterDevice, PrinterType as UnifiedPrinterType } from './UnifiedPrinterService';
 
 // Storage keys
 const PRINTER_CONFIG_KEY = 'pos_printer_config';
 const RECEIPT_DESIGN_KEY = 'pos_receipt_design';
+const AUTO_PRINT_KEY = 'pos_auto_print_enabled';
 
-// Printer types
-export type PrinterType = 'bluetooth' | 'network' | 'usb' | 'none';
+// Printer types (keeping backward compatibility)
+export type PrinterType = 'bluetooth' | 'network' | 'wifi' | 'usb' | 'none';
 
 export interface PrinterConfig {
   type: PrinterType;
@@ -485,56 +488,160 @@ export const generateKitchenTicketCommands = (data: {
   return cmd;
 };
 
-// Print via network (ESC/POS over TCP)
+// Print via network/WiFi (ESC/POS over TCP) - Now uses UnifiedPrinterService
 export const printToNetworkPrinter = async (
   address: string, 
   data: string
 ): Promise<boolean> => {
-  // Note: For React Native, you would use react-native-tcp-socket or similar
-  // This is a placeholder implementation
   try {
-    console.log('Printing to network printer:', address);
-    console.log('Data:', data);
+    console.log('Printing to network/WiFi printer:', address);
     
-    // In a real implementation:
-    // const socket = TcpSocket.createConnection({ host, port }, () => {
-    //   socket.write(data);
-    //   socket.end();
-    // });
+    // Check if already connected to a WiFi printer
+    const status = UnifiedPrinterService.getConnectionStatus();
     
-    Alert.alert(
-      'Impression Réseau',
-      `Envoi vers ${address}...\n\nNote: L'impression réseau nécessite une configuration supplémentaire.`
-    );
+    if (status.isConnected && status.type === 'wifi') {
+      return await UnifiedPrinterService.print(data);
+    }
     
-    return true;
+    // Try to connect to the WiFi printer
+    const [ip, portStr] = address.split(':');
+    const port = parseInt(portStr) || 9100;
+    
+    const device: PrinterDevice = {
+      id: `wifi_${ip}_${port}`,
+      name: `WiFi Printer (${ip})`,
+      address: address,
+      type: 'wifi',
+    };
+    
+    const connected = await UnifiedPrinterService.connect(device);
+    if (!connected) {
+      Alert.alert(
+        '🌐 Imprimante WiFi non accessible',
+        `Impossible de se connecter à ${address}.\nVérifiez l'adresse IP et que l'imprimante est allumée.`,
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    
+    return await UnifiedPrinterService.print(data);
   } catch (error) {
     console.error('Network print error:', error);
+    Alert.alert('Erreur d\'impression', 'Impossible d\'imprimer via WiFi.');
     return false;
   }
 };
 
-// Print via Bluetooth
+// Print via Bluetooth - Uses UnifiedPrinterService for unified printing
 export const printToBluetoothPrinter = async (
   macAddress: string,
   data: string
 ): Promise<boolean> => {
-  // Note: For React Native, you would use react-native-bluetooth-escpos-printer
-  // This is a placeholder implementation
   try {
     console.log('Printing to Bluetooth printer:', macAddress);
     
-    // In a real implementation:
-    // await BluetoothEscposPrinter.printText(data, {});
+    // Check if already connected via UnifiedPrinterService
+    const status = UnifiedPrinterService.getConnectionStatus();
     
-    Alert.alert(
-      'Impression Bluetooth',
-      `Envoi vers ${macAddress}...\n\nNote: L'impression Bluetooth nécessite la bibliothèque react-native-bluetooth-escpos-printer.`
-    );
+    if (status.isConnected && status.type === 'bluetooth') {
+      return await UnifiedPrinterService.printWithRetry(data, 2);
+    }
     
-    return true;
+    // Try to quick connect
+    const lastDevice = await UnifiedPrinterService.getActivePrinter();
+    
+    if (lastDevice && lastDevice.address === macAddress && lastDevice.type === 'bluetooth') {
+      const connected = await UnifiedPrinterService.connect(lastDevice);
+      if (connected) {
+        return await UnifiedPrinterService.printWithRetry(data, 2);
+      }
+    }
+    
+    // Try legacy BluetoothPrinterService as fallback
+    const legacyConnected = BluetoothPrinterService.isConnected();
+    
+    if (!legacyConnected) {
+      const legacyDevice = await BluetoothPrinterService.getLastConnectedDevice();
+      
+      if (legacyDevice && legacyDevice.address === macAddress) {
+        const connected = await BluetoothPrinterService.connect(legacyDevice);
+        if (!connected) {
+          Alert.alert(
+            '🖨️ Imprimante non connectée',
+            'Impossible de se connecter à l\'imprimante.\nVérifiez qu\'elle est allumée et à portée.',
+            [
+              { text: 'OK' },
+              { 
+                text: 'Paramètres Bluetooth', 
+                onPress: () => {
+                  if (Platform.OS === 'android') {
+                    Linking.sendIntent('android.settings.BLUETOOTH_SETTINGS').catch(() => {
+                      Linking.openSettings();
+                    });
+                  }
+                }
+              }
+            ]
+          );
+          return false;
+        }
+      } else {
+        Alert.alert(
+          '🖨️ Connectez l\'imprimante',
+          'Veuillez connecter une imprimante Bluetooth via les paramètres.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+    }
+    
+    // Print with retry
+    const success = await BluetoothPrinterService.printWithRetry(data, 2);
+    return success;
+    
   } catch (error) {
     console.error('Bluetooth print error:', error);
+    Alert.alert('Erreur d\'impression', 'Impossible d\'imprimer. Vérifiez la connexion.');
+    return false;
+  }
+};
+
+// Print via USB - Uses UnifiedPrinterService
+export const printToUSBPrinter = async (
+  devicePath: string,
+  data: string
+): Promise<boolean> => {
+  try {
+    console.log('Printing to USB printer:', devicePath);
+    
+    const status = UnifiedPrinterService.getConnectionStatus();
+    
+    if (status.isConnected && status.type === 'usb') {
+      return await UnifiedPrinterService.print(data);
+    }
+    
+    // Try to connect to USB device
+    const device: PrinterDevice = {
+      id: `usb_${devicePath}`,
+      name: 'USB Printer',
+      address: devicePath,
+      type: 'usb',
+    };
+    
+    const connected = await UnifiedPrinterService.connect(device);
+    if (!connected) {
+      Alert.alert(
+        '🔌 Imprimante USB non détectée',
+        'Vérifiez que l\'imprimante est connectée via USB OTG.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    
+    return await UnifiedPrinterService.print(data);
+  } catch (error) {
+    console.error('USB print error:', error);
+    Alert.alert('Erreur d\'impression', 'Impossible d\'imprimer via USB.');
     return false;
   }
 };
@@ -556,12 +663,12 @@ export const printReceipt = async (
   
   switch (config.type) {
     case 'network':
+    case 'wifi':
       return printToNetworkPrinter(config.address, commands);
     case 'bluetooth':
       return printToBluetoothPrinter(config.address, commands);
     case 'usb':
-      Alert.alert('USB', 'L\'impression USB n\'est pas encore supportée sur mobile.');
-      return false;
+      return printToUSBPrinter(config.address, commands);
     default:
       return false;
   }
@@ -580,9 +687,12 @@ export const printKitchenTicket = async (
   
   switch (config.type) {
     case 'network':
+    case 'wifi':
       return printToNetworkPrinter(config.address, commands);
     case 'bluetooth':
       return printToBluetoothPrinter(config.address, commands);
+    case 'usb':
+      return printToUSBPrinter(config.address, commands);
     default:
       return false;
   }
@@ -598,9 +708,12 @@ export const openCashDrawer = async (config: PrinterConfig): Promise<boolean> =>
   
   switch (config.type) {
     case 'network':
+    case 'wifi':
       return printToNetworkPrinter(config.address, command);
     case 'bluetooth':
       return printToBluetoothPrinter(config.address, command);
+    case 'usb':
+      return printToUSBPrinter(config.address, command);
     default:
       return false;
   }
@@ -800,13 +913,104 @@ export const printDailyReport = async (
   
   switch (config.type) {
     case 'network':
+    case 'wifi':
       return printToNetworkPrinter(config.address, commands);
     case 'bluetooth':
       return printToBluetoothPrinter(config.address, commands);
     case 'usb':
-      Alert.alert('USB', 'L\'impression USB n\'est pas encore supportée sur mobile.');
-      return false;
+      return printToUSBPrinter(config.address, commands);
     default:
       return false;
   }
 };
+
+// ============================================================================
+// AUTO-PRINT CONFIGURATION
+// ============================================================================
+
+export const setAutoPrintEnabled = async (enabled: boolean): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(AUTO_PRINT_KEY, enabled ? 'true' : 'false');
+  } catch (error) {
+    console.error('Error saving auto-print setting:', error);
+  }
+};
+
+export const getAutoPrintEnabled = async (): Promise<boolean> => {
+  try {
+    const value = await AsyncStorage.getItem(AUTO_PRINT_KEY);
+    return value === 'true';
+  } catch (error) {
+    console.error('Error loading auto-print setting:', error);
+    return false;
+  }
+};
+
+// ============================================================================
+// QUICK PRINT FUNCTION (uses UnifiedPrinterService for all printer types)
+// ============================================================================
+
+export const quickPrintReceipt = async (receiptData: ReceiptData): Promise<boolean> => {
+  try {
+    // First check if UnifiedPrinterService is already connected
+    const status = UnifiedPrinterService.getConnectionStatus();
+    const commands = generateReceiptCommands(receiptData);
+    
+    if (status.isConnected) {
+      // Use the already connected printer
+      return await UnifiedPrinterService.print(commands);
+    }
+    
+    // Fallback to config-based printing
+    const config = await loadPrinterConfig();
+    
+    if (!config.enabled || config.type === 'none') {
+      console.log('Printer not configured, skipping print');
+      return false;
+    }
+    
+    switch (config.type) {
+      case 'bluetooth':
+        // Try UnifiedPrinterService first
+        const btConnected = await UnifiedPrinterService.quickConnect();
+        if (btConnected) {
+          return await UnifiedPrinterService.print(commands);
+        }
+        // Fallback to BluetoothPrinterService
+        const legacyConnected = BluetoothPrinterService.isConnected();
+        if (!legacyConnected) {
+          const connected = await BluetoothPrinterService.quickConnect();
+          if (!connected) {
+            console.log('Could not quick connect to Bluetooth printer');
+            return false;
+          }
+        }
+        return await BluetoothPrinterService.print(commands);
+        
+      case 'network':
+      case 'wifi':
+        return await printToNetworkPrinter(config.address, commands);
+        
+      case 'usb':
+        return await printToUSBPrinter(config.address, commands);
+        
+      default:
+        return false;
+    }
+  } catch (error) {
+    console.error('Quick print error:', error);
+    return false;
+  }
+};
+
+// ============================================================================
+// UNIFIED PRINTER SERVICE - Direct Access for new UI
+// ============================================================================
+
+export { UnifiedPrinterService };
+
+// ============================================================================
+// BLUETOOTH SERVICE EXPORT (for legacy/backward compatibility)
+// ============================================================================
+
+export { BluetoothPrinterService };

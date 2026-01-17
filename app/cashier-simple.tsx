@@ -37,6 +37,9 @@ import {
   List,
   ShoppingBag,
   Lock,
+  Bluetooth,
+  BluetoothConnected,
+  Zap,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -55,9 +58,10 @@ import {
   OfflineOrderItem,
   clearInvalidSyncQueueItems,
 } from '../lib/offline-db';
-import { loadPrinterConfig, printReceipt, ReceiptData, printDailyReport, DailyReportData } from '../lib/printing';
+import { loadPrinterConfig, printReceipt, ReceiptData, printDailyReport, DailyReportData, BluetoothPrinterService, quickPrintReceipt } from '../lib/printing';
 import { hasPermission, type UserRole } from '../lib/permissions';
 import AdminPanel from '../components/AdminPanel';
+import BluetoothPrinterModal from '../components/BluetoothPrinterModal';
 
 // Types
 interface CartItem {
@@ -202,6 +206,8 @@ export default function CashierSimpleScreen() {
   
   // Printing
   const [printing, setPrinting] = useState(false);
+  const [printerConnected, setPrinterConnected] = useState(false);
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
   
   // Admin Panel
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -274,6 +280,10 @@ export default function CashierSimpleScreen() {
         await loadAllStockProducts();
         await loadTodayExpenses();
         
+        // Check printer connection status
+        const printerStatus = BluetoothPrinterService.getConnectionStatus();
+        setPrinterConnected(printerStatus.isConnected);
+        
       } catch (error) {
         console.error('Init error:', error);
         Alert.alert('Erreur', 'Impossible d\'initialiser la base de données');
@@ -284,12 +294,20 @@ export default function CashierSimpleScreen() {
     
     init();
     
+    // Subscribe to printer connection status
+    const unsubscribePrinter = BluetoothPrinterService.onConnectionStatusChange((status) => {
+      setPrinterConnected(status === 'connected');
+    });
+    
     // Refresh pending orders periodically (no network check)
     const interval = setInterval(async () => {
       await loadPendingOrders();
     }, 30000);
     
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      unsubscribePrinter();
+    };
   }, []);
 
   const loadLocalData = async () => {
@@ -1168,6 +1186,27 @@ export default function CashierSimpleScreen() {
                 <Settings size={ui.iconMd} color={colors.white} />
               </TouchableOpacity>
             )}
+            
+            {/* Printer Status Indicator */}
+            <TouchableOpacity
+              onPress={() => setShowPrinterModal(true)}
+              style={{ 
+                width: ui.iconBtn, 
+                height: ui.iconBtn, 
+                borderRadius: ui.iconBtn / 2, 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                backgroundColor: printerConnected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.15)',
+                borderWidth: printerConnected ? 2 : 0,
+                borderColor: printerConnected ? '#10B981' : 'transparent',
+              }}
+            >
+              {printerConnected ? (
+                <BluetoothConnected size={ui.iconMd} color="#10B981" />
+              ) : (
+                <Bluetooth size={ui.iconMd} color={colors.white} />
+              )}
+            </TouchableOpacity>
             
             {/* Logout */}
             <TouchableOpacity
@@ -3602,6 +3641,16 @@ export default function CashierSimpleScreen() {
         visible={showAdminPanel}
         onClose={() => setShowAdminPanel(false)}
         onDataChanged={refreshAllData}
+      />
+
+      {/* Bluetooth Printer Modal - Quick Connect */}
+      <BluetoothPrinterModal
+        visible={showPrinterModal}
+        onClose={() => setShowPrinterModal(false)}
+        onConnected={(device) => {
+          setPrinterConnected(true);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }}
       />
 
       {/* Stock Management Modal */}

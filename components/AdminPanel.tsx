@@ -41,6 +41,8 @@ import {
   Usb,
   AlertTriangle,
   Minus,
+  BluetoothConnected,
+  Zap,
 } from 'lucide-react-native';
 import * as Crypto from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
@@ -62,7 +64,9 @@ import {
   loadReceiptDesign,
   saveReceiptDesign,
   type ReceiptDesign,
+  BluetoothPrinterService,
 } from '../lib/printing';
+import BluetoothPrinterModal from './BluetoothPrinterModal';
 
 interface AdminPanelProps {
   visible: boolean;
@@ -150,6 +154,8 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
   const [showBluetoothModal, setShowBluetoothModal] = useState(false);
   const [bluetoothDevices, setBluetoothDevices] = useState<BluetoothDevice[]>([]);
   const [scanningBluetooth, setScanningBluetooth] = useState(false);
+  const [printerConnected, setPrinterConnected] = useState(false);
+  const [connectedPrinterName, setConnectedPrinterName] = useState<string | null>(null);
   
   // Receipt Design
   const [showReceiptDesignModal, setShowReceiptDesignModal] = useState(false);
@@ -242,6 +248,11 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
     if (savedDesign) {
       setReceiptDesign(savedDesign);
     }
+    
+    // Check printer connection status
+    const status = BluetoothPrinterService.getConnectionStatus();
+    setPrinterConnected(status.isConnected);
+    setConnectedPrinterName(status.device?.name || null);
   };
 
   // Bluetooth scanning
@@ -1303,6 +1314,65 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
             <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>Imprimante de reçus</Text>
           </View>
           
+          {/* Bluetooth Connection Status Banner */}
+          {printerType === 'bluetooth' && (
+            <TouchableOpacity
+              onPress={() => setShowBluetoothModal(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: spacing.md,
+                backgroundColor: printerConnected ? '#D1FAE5' : '#FEF3C7',
+                borderRadius: borderRadius.lg,
+                gap: spacing.md,
+                marginBottom: spacing.lg,
+              }}
+            >
+              <View style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: printerConnected ? colors.success : colors.warning,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                {printerConnected ? (
+                  <BluetoothConnected size={20} color={colors.white} />
+                ) : (
+                  <Bluetooth size={20} color={colors.white} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ 
+                  fontSize: fontSize.sm, 
+                  fontWeight: '600', 
+                  color: printerConnected ? '#065F46' : '#92400E' 
+                }}>
+                  {printerConnected ? '✓ Imprimante connectée' : '⚡ Connexion rapide'}
+                </Text>
+                <Text style={{ 
+                  fontSize: fontSize.xs, 
+                  color: printerConnected ? '#047857' : '#B45309',
+                  marginTop: 2,
+                }}>
+                  {printerConnected 
+                    ? connectedPrinterName || 'Connectée' 
+                    : 'Appuyez pour connecter'}
+                </Text>
+              </View>
+              <View style={{
+                backgroundColor: printerConnected ? colors.success : colors.primary,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                borderRadius: borderRadius.md,
+              }}>
+                <Text style={{ color: colors.white, fontSize: fontSize.xs, fontWeight: '600' }}>
+                  {printerConnected ? 'Gérer' : 'Connecter'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          
           {/* Printer Type Selection */}
           <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.sm }}>Type de connexion</Text>
           <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
@@ -1339,11 +1409,11 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
             ))}
           </View>
           
-          {/* Printer Address (only show for bluetooth/wifi) */}
-          {(printerType === 'bluetooth' || printerType === 'wifi') && (
+          {/* Printer Address (only show for wifi) */}
+          {printerType === 'wifi' && (
             <>
               <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.sm }}>
-                {printerType === 'bluetooth' ? 'Adresse MAC' : 'Adresse IP'}
+                Adresse IP
               </Text>
               <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
                 <TextInput
@@ -1359,23 +1429,9 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                   }}
                   value={printerAddress}
                   onChangeText={setPrinterAddress}
-                  placeholder={printerType === 'bluetooth' ? 'XX:XX:XX:XX:XX:XX' : '192.168.1.100'}
+                  placeholder="192.168.1.100"
                   placeholderTextColor={colors.textMuted}
                 />
-                {printerType === 'bluetooth' && (
-                  <TouchableOpacity
-                    onPress={() => setShowBluetoothModal(true)}
-                    style={{
-                      backgroundColor: colors.primary,
-                      borderRadius: borderRadius.md,
-                      paddingHorizontal: spacing.md,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Search size={20} color={colors.white} />
-                  </TouchableOpacity>
-                )}
               </View>
             </>
           )}
@@ -1950,172 +2006,17 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           </View>
         </Modal>
 
-        {/* Bluetooth Discovery Modal */}
-        <Modal visible={showBluetoothModal} transparent animationType="fade">
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}>
-            <View style={{ backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.xl, width: '100%', maxWidth: 400, maxHeight: '85%' }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
-                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
-                  Imprimante Bluetooth
-                </Text>
-                <TouchableOpacity onPress={() => setShowBluetoothModal(false)}>
-                  <X size={24} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-              
-              {/* Instructions */}
-              <View style={{ 
-                backgroundColor: colors.primaryLight, 
-                padding: spacing.md, 
-                borderRadius: borderRadius.md, 
-                marginBottom: spacing.lg 
-              }}>
-                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.primary, marginBottom: spacing.sm }}>
-                  📋 Instructions de connexion:
-                </Text>
-                <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, lineHeight: 18 }}>
-                  1. Activez le Bluetooth sur votre appareil{'\n'}
-                  2. Allumez votre imprimante en mode appairage{'\n'}
-                  3. Appairez l'imprimante dans les paramètres Bluetooth{'\n'}
-                  4. Entrez l'adresse MAC ci-dessous
-                </Text>
-              </View>
-              
-              {/* Open Bluetooth Settings button */}
-              <TouchableOpacity
-                onPress={scanForBluetoothDevices}
-                disabled={scanningBluetooth}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: spacing.sm,
-                  backgroundColor: colors.primary,
-                  paddingVertical: spacing.md,
-                  borderRadius: borderRadius.md,
-                  marginBottom: spacing.lg,
-                }}
-              >
-                {scanningBluetooth ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Bluetooth size={20} color={colors.white} />
-                )}
-                <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.white }}>
-                  {scanningBluetooth ? 'Vérification...' : 'Ouvrir paramètres Bluetooth'}
-                </Text>
-              </TouchableOpacity>
-              
-              {/* Manual address input */}
-              <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
-                Adresse MAC de l'imprimante:
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: colors.background,
-                  borderRadius: borderRadius.md,
-                  padding: spacing.md,
-                  fontSize: fontSize.md,
-                  color: colors.textPrimary,
-                  borderWidth: 1,
-                  borderColor: colors.borderLight,
-                  marginBottom: spacing.lg,
-                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                }}
-                value={printerAddress}
-                onChangeText={setPrinterAddress}
-                placeholder="XX:XX:XX:XX:XX:XX"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="characters"
-              />
-              
-              {/* Saved devices list */}
-              {bluetoothDevices.length > 0 && (
-                <>
-                  <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
-                    Appareils sauvegardés:
-                  </Text>
-                  <ScrollView style={{ maxHeight: 150 }}>
-                    {bluetoothDevices.map((device) => (
-                      <TouchableOpacity
-                        key={device.address || device.name}
-                        onPress={() => selectBluetoothDevice(device)}
-                        disabled={!device.address}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: spacing.md,
-                          padding: spacing.md,
-                          backgroundColor: device.paired ? colors.successLight : colors.background,
-                          borderRadius: borderRadius.md,
-                          marginBottom: spacing.sm,
-                          opacity: device.address ? 1 : 0.5,
-                        }}
-                      >
-                        <Bluetooth size={24} color={device.paired ? colors.success : colors.primary} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>
-                            {device.name || 'Appareil inconnu'}
-                          </Text>
-                          {device.address && (
-                            <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>
-                              {device.address}
-                            </Text>
-                          )}
-                        </View>
-                        {device.paired && (
-                          <Text style={{ fontSize: fontSize.xs, color: colors.success, fontWeight: '600' }}>
-                            ✓ Utilisé
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </>
-              )}
-              
-              {/* Action buttons */}
-              <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.md }}>
-                <TouchableOpacity
-                  onPress={() => setShowBluetoothModal(false)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: spacing.md,
-                    borderRadius: borderRadius.md,
-                    backgroundColor: colors.background,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textSecondary }}>
-                    Fermer
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (printerAddress) {
-                      setShowBluetoothModal(false);
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      Alert.alert('✅ Adresse sauvegardée', printerAddress);
-                    } else {
-                      Alert.alert('Erreur', 'Veuillez entrer une adresse MAC');
-                    }
-                  }}
-                  style={{
-                    flex: 1,
-                    paddingVertical: spacing.md,
-                    borderRadius: borderRadius.md,
-                    backgroundColor: colors.success,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.white }}>
-                    Confirmer
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        {/* Bluetooth Printer Modal - Professional POS Connection UI */}
+        <BluetoothPrinterModal
+          visible={showBluetoothModal}
+          onClose={() => setShowBluetoothModal(false)}
+          onConnected={(device) => {
+            setPrinterAddress(device.address);
+            setPrinterConnected(true);
+            setConnectedPrinterName(device.name);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }}
+        />
 
         {/* Receipt Design Modal */}
         <Modal visible={showReceiptDesignModal} transparent animationType="fade">

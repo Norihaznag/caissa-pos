@@ -69,13 +69,13 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@rnx-kit/jest-preset": "^0.1.17",
     "@types/react": "19.1.17",
     "@types/uuid": "^11.0.0",
     "eslint": "9.37.0",
     "eslint-config-expo": "10.0.0",
     "prettier-plugin-tailwindcss": "^0.5.14",
-    "typescript": "5.9.3",
-    "@rnx-kit/jest-preset": "^0.1.17"
+    "typescript": "5.9.3"
   },
   "private": true,
   "react-native-windows": {

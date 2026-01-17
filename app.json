@@ -2,7 +2,7 @@
   "expo": {
     "name": "CaissaPro",
     "slug": "caissa-pro",
-    "version": "1.0.0",
+    "version": "2.1.0",
     "description": "Système de caisse moderne et intuitif pour restaurants et cafés. Gérez vos tables, commandes, paiements et rapports en toute simplicité.",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.caissapro.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#3B82F6",
         "foregroundImage": "./assets/images/adaptive-icon.png"
@@ -37,11 +37,16 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.VIBRATE"
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.FOREGROUND_SERVICE"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
