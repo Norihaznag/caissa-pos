@@ -11,6 +11,7 @@ import {
   Modal,
   useWindowDimensions,
   Image,
+  Platform,
 } from 'react-native';
 import {
   X,
@@ -54,6 +55,14 @@ import {
   clearSyncQueue,
   OfflineUser,
 } from '../lib/offline-db';
+import { 
+  discoverBluetoothDevices, 
+  requestBluetoothPermissions,
+  type BluetoothDevice,
+  loadReceiptDesign,
+  saveReceiptDesign,
+  type ReceiptDesign,
+} from '../lib/printing';
 
 interface AdminPanelProps {
   visible: boolean;
@@ -136,6 +145,32 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
   const [printerType, setPrinterType] = useState<'bluetooth' | 'wifi' | 'usb' | 'none'>('none');
   const [printerAddress, setPrinterAddress] = useState('');
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
+  
+  // Bluetooth Discovery
+  const [showBluetoothModal, setShowBluetoothModal] = useState(false);
+  const [bluetoothDevices, setBluetoothDevices] = useState<BluetoothDevice[]>([]);
+  const [scanningBluetooth, setScanningBluetooth] = useState(false);
+  
+  // Receipt Design
+  const [showReceiptDesignModal, setShowReceiptDesignModal] = useState(false);
+  const [receiptDesign, setReceiptDesign] = useState<ReceiptDesign>({
+    showLogo: true,
+    restaurantName: 'CaissaPro',
+    address: '',
+    city: '',
+    phone: '',
+    taxId: '',
+    footerMessage: 'Merci de votre visite!',
+    footerMessageArabic: 'شكرا لزيارتكم',
+    showTaxId: true,
+    showOrderNumber: true,
+    showTableNumber: true,
+    showWaiterName: false,
+    showDateTime: true,
+    showPaymentDetails: true,
+    fontSize: 'normal',
+    paperWidth: 80,
+  });
 
   // Load data when tab changes
   useEffect(() => {
@@ -201,6 +236,61 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
     setPrinterType((allSettings['printer_type'] as any) || 'none');
     setPrinterAddress(allSettings['printer_address'] || '');
     setAutoPrintReceipt(allSettings['auto_print_receipt'] === 'true');
+    
+    // Load receipt design
+    const savedDesign = await loadReceiptDesign();
+    if (savedDesign) {
+      setReceiptDesign(savedDesign);
+    }
+  };
+
+  // Bluetooth scanning
+  const scanForBluetoothDevices = async () => {
+    setScanningBluetooth(true);
+    try {
+      const hasPermission = await requestBluetoothPermissions();
+      if (!hasPermission) {
+        Alert.alert(
+          'Permission requise',
+          'Veuillez autoriser l\'accès au Bluetooth dans les paramètres de votre téléphone.'
+        );
+        return;
+      }
+      
+      const devices = await discoverBluetoothDevices();
+      setBluetoothDevices(devices);
+      
+      // The discoverBluetoothDevices function now shows helpful instructions
+      // so we don't need to show another alert here
+    } catch (error) {
+      console.error('Bluetooth scan error:', error);
+      Alert.alert('Erreur', 'Impossible de scanner les appareils Bluetooth');
+    } finally {
+      setScanningBluetooth(false);
+    }
+  };
+
+  const selectBluetoothDevice = (device: BluetoothDevice) => {
+    if (!device.address) {
+      Alert.alert('Erreur', 'Cet appareil n\'a pas d\'adresse valide');
+      return;
+    }
+    setPrinterAddress(device.address);
+    setShowBluetoothModal(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert('✅ Appareil sélectionné', `${device.name}\n${device.address}`);
+  };
+
+  // Save receipt design
+  const handleSaveReceiptDesign = async () => {
+    try {
+      await saveReceiptDesign(receiptDesign);
+      setShowReceiptDesignModal(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('✅ Sauvegardé', 'Le design du reçu a été sauvegardé.');
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de sauvegarder le design');
+    }
   };
 
   // ==================== CATEGORIES ====================
@@ -1266,22 +1356,38 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.sm }}>
                 {printerType === 'bluetooth' ? 'Adresse MAC' : 'Adresse IP'}
               </Text>
-              <TextInput
-                style={{
-                  backgroundColor: colors.background,
-                  borderRadius: borderRadius.md,
-                  padding: spacing.md,
-                  fontSize: fontSize.md,
-                  color: colors.textPrimary,
-                  marginBottom: spacing.lg,
-                  borderWidth: 1,
-                  borderColor: colors.borderLight,
-                }}
-                value={printerAddress}
-                onChangeText={setPrinterAddress}
-                placeholder={printerType === 'bluetooth' ? 'XX:XX:XX:XX:XX:XX' : '192.168.1.100'}
-                placeholderTextColor={colors.textMuted}
-              />
+              <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
+                <TextInput
+                  style={{
+                    flex: 1,
+                    backgroundColor: colors.background,
+                    borderRadius: borderRadius.md,
+                    padding: spacing.md,
+                    fontSize: fontSize.md,
+                    color: colors.textPrimary,
+                    borderWidth: 1,
+                    borderColor: colors.borderLight,
+                  }}
+                  value={printerAddress}
+                  onChangeText={setPrinterAddress}
+                  placeholder={printerType === 'bluetooth' ? 'XX:XX:XX:XX:XX:XX' : '192.168.1.100'}
+                  placeholderTextColor={colors.textMuted}
+                />
+                {printerType === 'bluetooth' && (
+                  <TouchableOpacity
+                    onPress={() => setShowBluetoothModal(true)}
+                    style={{
+                      backgroundColor: colors.primary,
+                      borderRadius: borderRadius.md,
+                      paddingHorizontal: spacing.md,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Search size={20} color={colors.white} />
+                  </TouchableOpacity>
+                )}
+              </View>
             </>
           )}
           
@@ -1295,6 +1401,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               backgroundColor: autoPrintReceipt ? colors.successLight : colors.background,
               borderRadius: borderRadius.lg,
               gap: spacing.md,
+              marginBottom: spacing.md,
             }}
           >
             <View style={{
@@ -1313,6 +1420,29 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               </Text>
               <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>
                 Imprimer le reçu après chaque paiement
+              </Text>
+            </View>
+          </TouchableOpacity>
+          
+          {/* Receipt Design Button */}
+          <TouchableOpacity
+            onPress={() => setShowReceiptDesignModal(true)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: spacing.md,
+              backgroundColor: colors.primaryLight,
+              borderRadius: borderRadius.lg,
+              gap: spacing.md,
+            }}
+          >
+            <Printer size={20} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: fontSize.sm, color: colors.primary, fontWeight: '500' }}>
+                Personnaliser le reçu
+              </Text>
+              <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>
+                Logo, texte, taille de papier...
               </Text>
             </View>
           </TouchableOpacity>
@@ -1825,6 +1955,398 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                   style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F59E0B', alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Sauvegarder</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Bluetooth Discovery Modal */}
+        <Modal visible={showBluetoothModal} transparent animationType="fade">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}>
+            <View style={{ backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.xl, width: '100%', maxWidth: 400, maxHeight: '85%' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
+                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
+                  Imprimante Bluetooth
+                </Text>
+                <TouchableOpacity onPress={() => setShowBluetoothModal(false)}>
+                  <X size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              
+              {/* Instructions */}
+              <View style={{ 
+                backgroundColor: colors.primaryLight, 
+                padding: spacing.md, 
+                borderRadius: borderRadius.md, 
+                marginBottom: spacing.lg 
+              }}>
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.primary, marginBottom: spacing.sm }}>
+                  📋 Instructions de connexion:
+                </Text>
+                <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, lineHeight: 18 }}>
+                  1. Activez le Bluetooth sur votre appareil{'\n'}
+                  2. Allumez votre imprimante en mode appairage{'\n'}
+                  3. Appairez l'imprimante dans les paramètres Bluetooth{'\n'}
+                  4. Entrez l'adresse MAC ci-dessous
+                </Text>
+              </View>
+              
+              {/* Open Bluetooth Settings button */}
+              <TouchableOpacity
+                onPress={scanForBluetoothDevices}
+                disabled={scanningBluetooth}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: spacing.sm,
+                  backgroundColor: colors.primary,
+                  paddingVertical: spacing.md,
+                  borderRadius: borderRadius.md,
+                  marginBottom: spacing.lg,
+                }}
+              >
+                {scanningBluetooth ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Bluetooth size={20} color={colors.white} />
+                )}
+                <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.white }}>
+                  {scanningBluetooth ? 'Vérification...' : 'Ouvrir paramètres Bluetooth'}
+                </Text>
+              </TouchableOpacity>
+              
+              {/* Manual address input */}
+              <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
+                Adresse MAC de l'imprimante:
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: colors.background,
+                  borderRadius: borderRadius.md,
+                  padding: spacing.md,
+                  fontSize: fontSize.md,
+                  color: colors.textPrimary,
+                  borderWidth: 1,
+                  borderColor: colors.borderLight,
+                  marginBottom: spacing.lg,
+                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                }}
+                value={printerAddress}
+                onChangeText={setPrinterAddress}
+                placeholder="XX:XX:XX:XX:XX:XX"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="characters"
+              />
+              
+              {/* Saved devices list */}
+              {bluetoothDevices.length > 0 && (
+                <>
+                  <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
+                    Appareils sauvegardés:
+                  </Text>
+                  <ScrollView style={{ maxHeight: 150 }}>
+                    {bluetoothDevices.map((device) => (
+                      <TouchableOpacity
+                        key={device.address || device.name}
+                        onPress={() => selectBluetoothDevice(device)}
+                        disabled={!device.address}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: spacing.md,
+                          padding: spacing.md,
+                          backgroundColor: device.paired ? colors.successLight : colors.background,
+                          borderRadius: borderRadius.md,
+                          marginBottom: spacing.sm,
+                          opacity: device.address ? 1 : 0.5,
+                        }}
+                      >
+                        <Bluetooth size={24} color={device.paired ? colors.success : colors.primary} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>
+                            {device.name || 'Appareil inconnu'}
+                          </Text>
+                          {device.address && (
+                            <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>
+                              {device.address}
+                            </Text>
+                          )}
+                        </View>
+                        {device.paired && (
+                          <Text style={{ fontSize: fontSize.xs, color: colors.success, fontWeight: '600' }}>
+                            ✓ Utilisé
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+              
+              {/* Action buttons */}
+              <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.md }}>
+                <TouchableOpacity
+                  onPress={() => setShowBluetoothModal(false)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: spacing.md,
+                    borderRadius: borderRadius.md,
+                    backgroundColor: colors.background,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textSecondary }}>
+                    Fermer
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (printerAddress) {
+                      setShowBluetoothModal(false);
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      Alert.alert('✅ Adresse sauvegardée', printerAddress);
+                    } else {
+                      Alert.alert('Erreur', 'Veuillez entrer une adresse MAC');
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: spacing.md,
+                    borderRadius: borderRadius.md,
+                    backgroundColor: colors.success,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.white }}>
+                    Confirmer
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Receipt Design Modal */}
+        <Modal visible={showReceiptDesignModal} transparent animationType="fade">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>
+            <View style={{ backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.xl, width: '100%', maxWidth: 450, maxHeight: '90%' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
+                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
+                  Design du reçu
+                </Text>
+                <TouchableOpacity onPress={() => setShowReceiptDesignModal(false)}>
+                  <X size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView style={{ maxHeight: '80%' }} showsVerticalScrollIndicator={false}>
+                {/* Restaurant Info */}
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
+                  INFORMATIONS RESTAURANT
+                </Text>
+                
+                <TextInput
+                  style={{
+                    backgroundColor: colors.background,
+                    borderRadius: borderRadius.md,
+                    padding: spacing.md,
+                    fontSize: fontSize.md,
+                    color: colors.textPrimary,
+                    marginBottom: spacing.sm,
+                  }}
+                  value={receiptDesign.restaurantName}
+                  onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, restaurantName: text }))}
+                  placeholder="Nom du restaurant"
+                />
+                
+                <TextInput
+                  style={{
+                    backgroundColor: colors.background,
+                    borderRadius: borderRadius.md,
+                    padding: spacing.md,
+                    fontSize: fontSize.md,
+                    color: colors.textPrimary,
+                    marginBottom: spacing.sm,
+                  }}
+                  value={receiptDesign.address}
+                  onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, address: text }))}
+                  placeholder="Adresse"
+                />
+                
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      backgroundColor: colors.background,
+                      borderRadius: borderRadius.md,
+                      padding: spacing.md,
+                      fontSize: fontSize.md,
+                      color: colors.textPrimary,
+                    }}
+                    value={receiptDesign.city}
+                    onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, city: text }))}
+                    placeholder="Ville"
+                  />
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      backgroundColor: colors.background,
+                      borderRadius: borderRadius.md,
+                      padding: spacing.md,
+                      fontSize: fontSize.md,
+                      color: colors.textPrimary,
+                    }}
+                    value={receiptDesign.phone}
+                    onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, phone: text }))}
+                    placeholder="Téléphone"
+                  />
+                </View>
+                
+                <TextInput
+                  style={{
+                    backgroundColor: colors.background,
+                    borderRadius: borderRadius.md,
+                    padding: spacing.md,
+                    fontSize: fontSize.md,
+                    color: colors.textPrimary,
+                    marginBottom: spacing.lg,
+                  }}
+                  value={receiptDesign.taxId}
+                  onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, taxId: text }))}
+                  placeholder="N° ICE / IF"
+                />
+                
+                {/* Footer Messages */}
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
+                  MESSAGES DE PIED DE PAGE
+                </Text>
+                
+                <TextInput
+                  style={{
+                    backgroundColor: colors.background,
+                    borderRadius: borderRadius.md,
+                    padding: spacing.md,
+                    fontSize: fontSize.md,
+                    color: colors.textPrimary,
+                    marginBottom: spacing.sm,
+                  }}
+                  value={receiptDesign.footerMessage}
+                  onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, footerMessage: text }))}
+                  placeholder="Message de remerciement"
+                />
+                
+                <TextInput
+                  style={{
+                    backgroundColor: colors.background,
+                    borderRadius: borderRadius.md,
+                    padding: spacing.md,
+                    fontSize: fontSize.md,
+                    color: colors.textPrimary,
+                    marginBottom: spacing.lg,
+                    textAlign: 'right',
+                  }}
+                  value={receiptDesign.footerMessageArabic}
+                  onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, footerMessageArabic: text }))}
+                  placeholder="شكرا لزيارتكم"
+                />
+                
+                {/* Paper Size */}
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
+                  TAILLE DU PAPIER
+                </Text>
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
+                  {([58, 80] as const).map((size) => (
+                    <TouchableOpacity
+                      key={size}
+                      onPress={() => setReceiptDesign(prev => ({ ...prev, paperWidth: size }))}
+                      style={{
+                        flex: 1,
+                        paddingVertical: spacing.md,
+                        borderRadius: borderRadius.md,
+                        backgroundColor: receiptDesign.paperWidth === size ? colors.primary : colors.background,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ 
+                        fontSize: fontSize.md, 
+                        fontWeight: '600', 
+                        color: receiptDesign.paperWidth === size ? colors.white : colors.textPrimary 
+                      }}>
+                        {size}mm
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                {/* Toggle Options */}
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
+                  OPTIONS D'AFFICHAGE
+                </Text>
+                
+                {[
+                  { key: 'showOrderNumber', label: 'Numéro de commande' },
+                  { key: 'showTableNumber', label: 'Numéro de table' },
+                  { key: 'showDateTime', label: 'Date et heure' },
+                  { key: 'showPaymentDetails', label: 'Détails du paiement' },
+                  { key: 'showTaxId', label: 'N° ICE / IF' },
+                ].map(({ key, label }) => (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => setReceiptDesign(prev => ({ ...prev, [key]: !prev[key as keyof ReceiptDesign] }))}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: spacing.sm,
+                      marginBottom: spacing.xs,
+                    }}
+                  >
+                    <View style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      backgroundColor: receiptDesign[key as keyof ReceiptDesign] ? colors.success : colors.border,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: spacing.md,
+                    }}>
+                      {receiptDesign[key as keyof ReceiptDesign] && <Check size={16} color={colors.white} />}
+                    </View>
+                    <Text style={{ fontSize: fontSize.sm, color: colors.textPrimary }}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              {/* Save Button */}
+              <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
+                <TouchableOpacity
+                  onPress={() => setShowReceiptDesignModal(false)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: spacing.md,
+                    borderRadius: borderRadius.md,
+                    backgroundColor: colors.background,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textSecondary }}>
+                    Annuler
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSaveReceiptDesign}
+                  style={{
+                    flex: 1,
+                    paddingVertical: spacing.md,
+                    borderRadius: borderRadius.md,
+                    backgroundColor: colors.primary,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.white }}>
+                    Sauvegarder
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>

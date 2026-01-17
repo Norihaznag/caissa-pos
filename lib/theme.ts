@@ -93,6 +93,29 @@ export const shadows = {
   },
 };
 
+// Touch target sizes - minimum for accessibility
+export const touchTargets = {
+  minimum: 44,
+  comfortable: 48,
+  large: 56,
+  tablet: {
+    minimum: 48,
+    comfortable: 52,
+    large: 60,
+  },
+};
+
+// Tablet-optimized font sizes
+export const fontSizeTablet = {
+  xs: 13,
+  sm: 15,
+  md: 17,
+  lg: 20,
+  xl: 24,
+  xxl: 28,
+  title: 34,
+};
+
 // Common component styles
 export const commonStyles = {
   // Buttons
