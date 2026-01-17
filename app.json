@@ -4,7 +4,7 @@
     "slug": "caissa-pro",
     "version": "1.0.0",
     "description": "Système de caisse moderne et intuitif pour restaurants et cafés. Gérez vos tables, commandes, paiements et rapports en toute simplicité.",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "caissapro",
     "userInterfaceStyle": "automatic",

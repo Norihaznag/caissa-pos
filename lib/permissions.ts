@@ -43,6 +43,7 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     // Printing capability
     'print_daily_report',
     'view_daily_report', // Needed to print reports
+    'view_all_orders', // Can view orders for management
   ],
   
   cashier: [

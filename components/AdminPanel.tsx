@@ -644,93 +644,82 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
         </Text>
       </View>
       
-      <View style={{ gap: spacing.md }}>
+      <View style={{ 
+        flexDirection: 'row', 
+        flexWrap: 'wrap', 
+        gap: spacing.md,
+        justifyContent: 'center',
+      }}>
         <TouchableOpacity
           onPress={() => setActiveTab('categories')}
           style={{
-            flexDirection: 'row',
+            width: isTablet ? 180 : '47%',
             alignItems: 'center',
             backgroundColor: colors.white,
-            padding: spacing.lg,
+            padding: spacing.xl,
             borderRadius: borderRadius.lg,
-            gap: spacing.lg,
             ...shadows.sm,
           }}
         >
-          <View style={{ width: 48, height: 48, borderRadius: borderRadius.md, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center' }}>
-            <Grid3x3 size={24} color={colors.primary} />
+          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
+            <Grid3x3 size={28} color={colors.primary} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>Catégories</Text>
-            <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 }}>Organiser les produits</Text>
-          </View>
-          <ChevronLeft size={20} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Catégories</Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Organiser les produits</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setActiveTab('products')}
           style={{
-            flexDirection: 'row',
+            width: isTablet ? 180 : '47%',
             alignItems: 'center',
             backgroundColor: colors.white,
-            padding: spacing.lg,
+            padding: spacing.xl,
             borderRadius: borderRadius.lg,
-            gap: spacing.lg,
             ...shadows.sm,
           }}
         >
-          <View style={{ width: 48, height: 48, borderRadius: borderRadius.md, backgroundColor: colors.successLight, alignItems: 'center', justifyContent: 'center' }}>
-            <Package size={24} color={colors.success} />
+          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: colors.successLight, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
+            <Package size={28} color={colors.success} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>Produits</Text>
-            <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 }}>Ajouter et modifier</Text>
-          </View>
-          <ChevronLeft size={20} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Produits</Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Ajouter et modifier</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setActiveTab('users')}
           style={{
-            flexDirection: 'row',
+            width: isTablet ? 180 : '47%',
             alignItems: 'center',
             backgroundColor: colors.white,
-            padding: spacing.lg,
+            padding: spacing.xl,
             borderRadius: borderRadius.lg,
-            gap: spacing.lg,
             ...shadows.sm,
           }}
         >
-          <View style={{ width: 48, height: 48, borderRadius: borderRadius.md, backgroundColor: colors.warningLight, alignItems: 'center', justifyContent: 'center' }}>
-            <Users size={24} color={colors.warning} />
+          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: colors.warningLight, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
+            <Users size={28} color={colors.warning} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>Utilisateurs</Text>
-            <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 }}>Gérer les accès</Text>
-          </View>
-          <ChevronLeft size={20} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Utilisateurs</Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Gérer les accès</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setActiveTab('settings')}
           style={{
-            flexDirection: 'row',
+            width: isTablet ? 180 : '47%',
             alignItems: 'center',
             backgroundColor: colors.white,
-            padding: spacing.lg,
+            padding: spacing.xl,
             borderRadius: borderRadius.lg,
-            gap: spacing.lg,
             ...shadows.sm,
           }}
         >
-          <View style={{ width: 48, height: 48, borderRadius: borderRadius.md, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center' }}>
-            <Coffee size={24} color="#9333EA" />
+          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
+            <Coffee size={28} color="#9333EA" />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>Paramètres</Text>
-            <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 }}>Configuration</Text>
-          </View>
-          <ChevronLeft size={20} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Paramètres</Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Configuration</Text>
         </TouchableOpacity>
       </View>
     </View>

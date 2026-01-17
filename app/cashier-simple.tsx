@@ -114,9 +114,37 @@ export default function CashierSimpleScreen() {
   
   // Responsive dimensions
   const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const isPhone = width < 768;
+  const isTablet = width >= 768 && width < 1024;
   const isLargeTablet = width >= 1024;
-  const numColumns = isPhone ? 2 : (isLargeTablet ? 5 : 4);
+  
+  // Professional POS grid layout
+  // Goal: Large, easily tappable cards with clear visual hierarchy
+  const CARD_GAP = 10;
+  const GRID_PADDING = 12;
+  
+  // Calculate optimal columns based on screen and cart visibility
+  const cartPanelWidth = !isPhone ? (isLargeTablet ? 400 : 340) : 0;
+  const availableWidth = width - cartPanelWidth - (GRID_PADDING * 2);
+  
+  // Target minimum card width for good touch targets (min 140px)
+  const getNumColumns = () => {
+    if (isPhone) {
+      // Phone: 2 columns portrait, 3 landscape
+      return isLandscape ? 3 : 2;
+    }
+    if (isTablet) {
+      // Tablet: 3 columns portrait, 4 landscape  
+      return isLandscape ? 4 : 3;
+    }
+    // Large tablet: 4 columns
+    return 4;
+  };
+  const numColumns = getNumColumns();
+  
+  // Calculate actual card width
+  const cardWidth = (availableWidth - (CARD_GAP * (numColumns - 1))) / numColumns;
   const [showCartModal, setShowCartModal] = useState(false);
   
   // Tablet-optimized sizing for touch targets and fonts
@@ -125,16 +153,17 @@ export default function CashierSimpleScreen() {
     iconBtn: isPhone ? 44 : 52,
     actionBtn: isPhone ? 44 : 52,
     cartBtn: isPhone ? 40 : 48,
-    // Font sizes
+    // Font sizes - optimized for readability
     text: {
-      xs: isPhone ? fontSize.xs : fontSizeTablet.xs,
-      sm: isPhone ? fontSize.sm : fontSizeTablet.sm,
-      md: isPhone ? fontSize.md : fontSizeTablet.md,
-      lg: isPhone ? fontSize.lg : fontSizeTablet.lg,
-      xl: isPhone ? fontSize.xl : fontSizeTablet.xl,
+      xs: isPhone ? 11 : 13,
+      sm: isPhone ? 13 : 15,
+      md: isPhone ? 15 : 17,
+      lg: isPhone ? 18 : 20,
+      xl: isPhone ? 22 : 26,
     },
-    // Product grid
-    productImageHeight: isPhone ? 100 : 140,
+    // Card dimensions
+    cardWidth: cardWidth,
+    cardHeight: cardWidth * 1.15, // Slightly taller than wide (professional look)
     // Cart panel
     cartWidth: isLargeTablet ? 400 : 340,
     // Icon sizes
@@ -1324,11 +1353,19 @@ export default function CashierSimpleScreen() {
           {/* Products Grid - Simple & Fast */}
           <FlatList
             data={filteredProducts}
-            key={numColumns}
+            key={`${numColumns}-${width}`}
             numColumns={numColumns}
             keyExtractor={(item) => item.id}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: isPhone ? 120 : spacing.xl, flexGrow: 1 }}
+            contentContainerStyle={{ 
+              paddingBottom: isPhone ? 100 : spacing.xl, 
+              paddingHorizontal: GRID_PADDING,
+              paddingTop: spacing.sm,
+            }}
+            columnWrapperStyle={{ 
+              gap: CARD_GAP,
+              marginBottom: CARD_GAP,
+            }}
             showsVerticalScrollIndicator={false}
             initialNumToRender={12}
             maxToRenderPerBatch={8}
@@ -1344,122 +1381,134 @@ export default function CashierSimpleScreen() {
               return (
                 <TouchableOpacity
                   onPress={() => addToCart(item)}
-                  activeOpacity={isOutOfStock ? 1 : 0.7}
+                  activeOpacity={isOutOfStock ? 1 : 0.8}
                   disabled={isOutOfStock}
                   style={{
-                    flex: 1,
-                    margin: spacing.xs,
-                    backgroundColor: isOutOfStock ? colors.background : colors.white,
-                    borderRadius: borderRadius.lg,
-                    overflow: 'hidden',
-                    maxWidth: isPhone ? '48%' : (isLargeTablet ? '19%' : '24%'),
-                    opacity: isOutOfStock ? 0.6 : 1,
-                    borderWidth: isLowStock ? 2 : 0,
-                    borderColor: isLowStock ? colors.warning : 'transparent',
+                    width: ui.cardWidth,
+                    height: ui.cardHeight,
                   }}
                 >
-                  {/* Product Image */}
-                  <View style={{ position: 'relative' }}>
-                    {item.imageUrl ? (
-                      <Image
-                        source={{ uri: item.imageUrl }}
-                        style={{
-                          width: '100%',
-                          height: ui.productImageHeight,
-                          backgroundColor: colors.background,
-                        }}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={{ 
-                        width: '100%', 
-                        height: ui.productImageHeight, 
-                        backgroundColor: isOutOfStock ? colors.border : colors.primaryLight, 
-                        alignItems: 'center', 
-                        justifyContent: 'center' 
-                      }}>
-                        <Coffee size={isPhone ? 32 : 40} color={isOutOfStock ? colors.textMuted : colors.primary} />
-                      </View>
-                    )}
-                    
-                    {/* Stock Badge */}
-                    {hasStockTracking && (
-                      <View style={{
-                        position: 'absolute',
-                        top: spacing.xs,
-                        right: spacing.xs,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: stockColor,
-                        paddingHorizontal: spacing.sm,
-                        paddingVertical: isPhone ? 2 : 4,
-                        borderRadius: borderRadius.full,
-                        gap: 3,
-                      }}>
-                        {isOutOfStock ? (
-                          <AlertTriangle size={isPhone ? 10 : 12} color={colors.white} />
-                        ) : isLowStock ? (
-                          <TrendingDown size={isPhone ? 10 : 12} color={colors.white} />
-                        ) : null}
-                        <Text style={{ fontSize: ui.text.xs, fontWeight: '700', color: colors.white }}>
-                          {isOutOfStock ? 'Épuisé' : item.stockQuantity}
-                        </Text>
-                      </View>
-                    )}
-                    
-                    {/* Out of Stock Overlay */}
-                    {isOutOfStock && (
-                      <View style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(0,0,0,0.3)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                        <View style={{
-                          backgroundColor: colors.error,
-                          paddingHorizontal: spacing.md,
-                          paddingVertical: spacing.xs,
-                          borderRadius: borderRadius.sm,
+                  <View style={{
+                    flex: 1,
+                    backgroundColor: colors.white,
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                    // Subtle shadow for depth
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 8,
+                    elevation: 3,
+                    // Low stock border
+                    borderWidth: isLowStock ? 2 : 0,
+                    borderColor: isLowStock ? colors.warning : 'transparent',
+                  }}>
+                    {/* Product Image Area - 65% of card */}
+                    <View style={{ 
+                      flex: 0.65, 
+                      backgroundColor: isOutOfStock ? '#F5F5F5' : colors.primaryLight,
+                      position: 'relative',
+                    }}>
+                      {item.imageUrl ? (
+                        <Image
+                          source={{ uri: item.imageUrl }}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                          }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={{ 
+                          flex: 1,
+                          alignItems: 'center', 
+                          justifyContent: 'center',
                         }}>
-                          <Text style={{ color: colors.white, fontWeight: '700', fontSize: fontSize.xs }}>
-                            RUPTURE
-                          </Text>
+                          <Coffee 
+                            size={isPhone ? 32 : 40} 
+                            color={isOutOfStock ? colors.textMuted : colors.primary} 
+                          />
                         </View>
-                      </View>
-                    )}
-                  </View>
-                  
-                  {/* Product Info */}
-                  <View style={{ padding: isPhone ? spacing.md : spacing.lg }}>
-                    <Text 
-                      style={{ 
-                        fontSize: ui.text.sm, 
-                        fontWeight: '600', 
-                        color: isOutOfStock ? colors.textMuted : colors.textPrimary,
-                        marginBottom: spacing.xs,
-                        lineHeight: ui.text.sm * 1.3,
-                      }}
-                      numberOfLines={2}
-                    >
-                      {item.name}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: isOutOfStock ? colors.textMuted : colors.primary }}>
-                        {item.price.toFixed(0)} <Text style={{ fontSize: ui.text.xs, fontWeight: '500' }}>DH</Text>
-                      </Text>
-                      {/* Low stock warning indicator */}
-                      {isLowStock && !isOutOfStock && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                          <AlertTriangle size={isPhone ? 12 : 14} color={colors.warning} />
-                          <Text style={{ fontSize: ui.text.xs, color: colors.warning, fontWeight: '600' }}>
-                            Bas
+                      )}
+                      
+                      {/* Stock Badge - Top Right */}
+                      {hasStockTracking && (
+                        <View style={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          backgroundColor: stockColor,
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 12,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 3,
+                        }}>
+                          {isOutOfStock && <AlertTriangle size={11} color={colors.white} />}
+                          {isLowStock && !isOutOfStock && <TrendingDown size={11} color={colors.white} />}
+                          <Text style={{ 
+                            fontSize: 11, 
+                            fontWeight: '700', 
+                            color: colors.white,
+                          }}>
+                            {isOutOfStock ? 'Épuisé' : item.stockQuantity}
                           </Text>
                         </View>
                       )}
+                      
+                      {/* Out of Stock Overlay */}
+                      {isOutOfStock && (
+                        <View style={{
+                          ...StyleSheet.absoluteFillObject,
+                          backgroundColor: 'rgba(0,0,0,0.5)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          <View style={{
+                            backgroundColor: colors.error,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 6,
+                          }}>
+                            <Text style={{ 
+                              color: colors.white, 
+                              fontWeight: '800', 
+                              fontSize: 12,
+                              letterSpacing: 0.5,
+                            }}>
+                              RUPTURE
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                    
+                    {/* Product Info - 35% of card */}
+                    <View style={{ 
+                      flex: 0.35, 
+                      padding: 10,
+                      justifyContent: 'center',
+                      backgroundColor: isOutOfStock ? '#FAFAFA' : colors.white,
+                    }}>
+                      <Text 
+                        style={{ 
+                          fontSize: ui.text.sm, 
+                          fontWeight: '600', 
+                          color: isOutOfStock ? colors.textMuted : colors.textPrimary,
+                          marginBottom: 4,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {item.name}
+                      </Text>
+                      <Text style={{ 
+                        fontSize: ui.text.lg, 
+                        fontWeight: '800', 
+                        color: isOutOfStock ? colors.textMuted : colors.primary,
+                      }}>
+                        {item.price.toFixed(0)} <Text style={{ fontSize: ui.text.sm, fontWeight: '600' }}>DH</Text>
+                      </Text>
                     </View>
                   </View>
                 </TouchableOpacity>
