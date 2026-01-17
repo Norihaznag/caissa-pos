@@ -36,6 +36,7 @@ import {
   Clock,
   List,
   ShoppingBag,
+  Lock,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -565,6 +566,11 @@ export default function CashierSimpleScreen() {
 
   // Cart operations - with stock validation
   const addToCart = (product: Product) => {
+    // Immediate haptic feedback for responsiveness
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    
     // Check stock availability
     const hasStockTracking = product.stockQuantity !== undefined && product.stockQuantity >= 0;
     
@@ -886,8 +892,16 @@ export default function CashierSimpleScreen() {
       await loadPendingOrders();
       await reloadProducts();
       
-      // Simple success message
-      Alert.alert('✅ Payé!', `${total.toFixed(0)} DH - ${paymentMethod === 'cash' ? 'Espèces' : 'Carte'}`);
+      // Quick toast-style feedback (less intrusive)
+      const changeText = paymentMethod === 'cash' && parseFloat(amountReceived) > total 
+        ? ` • Monnaie: ${(parseFloat(amountReceived) - total).toFixed(0)} DH` 
+        : '';
+      Alert.alert(
+        '✅ Paiement réussi', 
+        `${total.toFixed(0)} DH${changeText}`,
+        [{ text: 'OK', style: 'default' }],
+        { cancelable: true }
+      );
       
     } catch (error) {
       console.error('Payment error:', error);
@@ -959,20 +973,20 @@ export default function CashierSimpleScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' }}>
         <View style={{
-          width: 64,
-          height: 64,
-          borderRadius: 16,
-          backgroundColor: colors.primary,
+          width: 80,
+          height: 80,
+          borderRadius: 20,
+          backgroundColor: 'rgba(255,255,255,0.2)',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: 16,
+          marginBottom: 24,
         }}>
-          <Coffee size={32} color={colors.white} />
+          <Coffee size={40} color={colors.white} />
         </View>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 16, color: colors.textSecondary, fontSize: fontSize.md }}>Chargement...</Text>
+        <Text style={{ fontSize: 28, fontWeight: '700', color: colors.white, marginBottom: 8 }}>CaissaPro</Text>
+        <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" style={{ marginTop: 16 }} />
       </SafeAreaView>
     );
   }
@@ -1297,56 +1311,89 @@ export default function CashierSimpleScreen() {
             ) : null}
           </View>
 
-          {/* Categories - Simple Pills */}
-          <View style={{ height: isPhone ? 48 : 56, marginBottom: spacing.md }}>
+          {/* Categories - Compact Pills with count */}
+          <View style={{ marginBottom: spacing.md }}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg, alignItems: 'center' }}
+              contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg }}
             >
               <TouchableOpacity
                 onPress={() => setSelectedCategory('all')}
                 style={{
-                  paddingHorizontal: isPhone ? spacing.lg : spacing.xl,
-                  paddingVertical: isPhone ? spacing.sm : spacing.md,
-                  minHeight: isPhone ? 40 : 48,
-                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.md,
                   borderRadius: borderRadius.full,
                   backgroundColor: selectedCategory === 'all' ? colors.primary : colors.white,
+                  gap: spacing.sm,
                   ...shadows.sm,
                 }}
               >
                 <Text style={{
-                  fontSize: ui.text.sm,
+                  fontSize: fontSize.sm,
                   fontWeight: '600',
                   color: selectedCategory === 'all' ? colors.white : colors.textPrimary,
                 }}>
                   Tous
                 </Text>
-              </TouchableOpacity>
-              {categories.map(cat => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setSelectedCategory(cat.id)}
-                  style={{
-                    paddingHorizontal: isPhone ? spacing.lg : spacing.xl,
-                    paddingVertical: isPhone ? spacing.sm : spacing.md,
-                    minHeight: isPhone ? 40 : 48,
-                    justifyContent: 'center',
-                    borderRadius: borderRadius.full,
-                    backgroundColor: selectedCategory === cat.id ? colors.primary : colors.white,
-                    ...shadows.sm,
-                  }}
-                >
-                  <Text style={{
-                    fontSize: ui.text.sm,
-                    fontWeight: '600',
-                    color: selectedCategory === cat.id ? colors.white : colors.textPrimary,
+                <View style={{
+                  backgroundColor: selectedCategory === 'all' ? 'rgba(255,255,255,0.25)' : colors.background,
+                  paddingHorizontal: spacing.sm,
+                  paddingVertical: 2,
+                  borderRadius: borderRadius.full,
+                }}>
+                  <Text style={{ 
+                    fontSize: 11, 
+                    fontWeight: '700', 
+                    color: selectedCategory === 'all' ? colors.white : colors.textSecondary 
                   }}>
-                    {cat.name}
+                    {products.filter(p => p.isActive).length}
                   </Text>
-                </TouchableOpacity>
-              ))}
+                </View>
+              </TouchableOpacity>
+              {categories.map(cat => {
+                const catProductCount = products.filter(p => p.categoryId === cat.id && p.isActive).length;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    onPress={() => setSelectedCategory(cat.id)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: spacing.lg,
+                      paddingVertical: spacing.md,
+                      borderRadius: borderRadius.full,
+                      backgroundColor: selectedCategory === cat.id ? colors.primary : colors.white,
+                      gap: spacing.sm,
+                      ...shadows.sm,
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: fontSize.sm,
+                      fontWeight: '600',
+                      color: selectedCategory === cat.id ? colors.white : colors.textPrimary,
+                    }}>
+                      {cat.name}
+                    </Text>
+                    <View style={{
+                      backgroundColor: selectedCategory === cat.id ? 'rgba(255,255,255,0.25)' : colors.background,
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: 2,
+                      borderRadius: borderRadius.full,
+                    }}>
+                      <Text style={{ 
+                        fontSize: 11, 
+                        fontWeight: '700', 
+                        color: selectedCategory === cat.id ? colors.white : colors.textSecondary 
+                      }}>
+                        {catProductCount}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
 
@@ -1661,13 +1708,27 @@ export default function CashierSimpleScreen() {
               )}
             </ScrollView>
 
-            {/* Cart Footer - Simple */}
-            <View style={{ padding: spacing.lg, borderTopWidth: 1, borderTopColor: colors.borderLight }}>
+            {/* Cart Footer - Enhanced with item count */}
+            <View style={{ 
+              padding: spacing.lg, 
+              borderTopWidth: 1, 
+              borderTopColor: colors.borderLight,
+              backgroundColor: colors.white,
+            }}>
+              {/* Subtotal row */}
+              {cart.length > 0 && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+                  <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>
+                    {cart.reduce((sum, i) => sum + i.quantity, 0)} article{cart.reduce((sum, i) => sum + i.quantity, 0) > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              )}
+              
               {/* Total */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
                 <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>Total</Text>
-                <Text style={{ fontSize: 28, fontWeight: '700', color: colors.primary }}>
-                  {total.toFixed(0)} DH
+                <Text style={{ fontSize: 32, fontWeight: '800', color: colors.primary }}>
+                  {total.toFixed(0)} <Text style={{ fontSize: 20, fontWeight: '600' }}>DH</Text>
                 </Text>
               </View>
 
@@ -1719,56 +1780,116 @@ export default function CashierSimpleScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Hold Button */}
-              {cart.length > 0 && (
-                <TouchableOpacity
-                  onPress={holdOrder}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: spacing.sm,
-                    backgroundColor: colors.warningLight,
-                    paddingVertical: spacing.lg,
-                    borderRadius: borderRadius.lg,
-                    marginTop: spacing.md,
-                  }}
-                >
-                  <Pause size={20} color="#D97706" />
-                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: '#D97706' }}>En attente</Text>
-                </TouchableOpacity>
-              )}
+              {/* Quick Pay & Hold Row */}
+              <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.md }}>
+                {/* Quick Exact Cash - One tap payment */}
+                {cart.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setPaymentMethod('cash');
+                      setAmountReceived(total.toString());
+                      handlePayment();
+                    }}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: spacing.sm,
+                      backgroundColor: '#E6F4EA',
+                      paddingVertical: spacing.lg,
+                      borderRadius: borderRadius.lg,
+                      borderWidth: 1,
+                      borderColor: colors.success,
+                    }}
+                  >
+                    <Check size={18} color={colors.success} />
+                    <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.success }}>Exact</Text>
+                  </TouchableOpacity>
+                )}
+                
+                {/* Hold Button */}
+                {cart.length > 0 && (
+                  <TouchableOpacity
+                    onPress={holdOrder}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: spacing.sm,
+                      backgroundColor: colors.warningLight,
+                      paddingVertical: spacing.lg,
+                      borderRadius: borderRadius.lg,
+                      borderWidth: 1,
+                      borderColor: colors.warning,
+                    }}
+                  >
+                    <Pause size={18} color="#D97706" />
+                    <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: '#D97706' }}>Attente</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         )}
       </View>
 
-      {/* Floating Cart Button for Phone */}
+      {/* Floating Cart Button for Phone - Pro Design */}
       {isPhone && (
         <TouchableOpacity
           onPress={() => setShowCartModal(true)}
+          activeOpacity={0.9}
           style={{
             position: 'absolute',
             bottom: spacing.xl,
-            left: spacing.xl,
-            right: spacing.xl,
+            left: spacing.lg,
+            right: spacing.lg,
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: cart.length > 0 ? colors.primary : colors.textMuted,
+            justifyContent: 'space-between',
+            backgroundColor: cart.length > 0 ? colors.primary : '#65676B',
             paddingVertical: spacing.lg,
-            borderRadius: borderRadius.lg,
-            gap: spacing.md,
-            ...shadows.lg,
+            paddingHorizontal: spacing.xl,
+            borderRadius: borderRadius.xl,
+            // Enhanced shadow for floating effect
+            shadowColor: cart.length > 0 ? colors.primary : '#000',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.35,
+            shadowRadius: 12,
+            elevation: 8,
           }}
         >
-          <ShoppingCart size={22} color={colors.white} />
-          <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.white }}>
-            {cart.reduce((sum, i) => sum + i.quantity, 0)} article{cart.reduce((sum, i) => sum + i.quantity, 0) !== 1 ? 's' : ''}
-          </Text>
-          {total > 0 && (
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: borderRadius.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View style={{ 
+              backgroundColor: 'rgba(255,255,255,0.2)', 
+              width: 36, 
+              height: 36, 
+              borderRadius: 18, 
+              alignItems: 'center', 
+              justifyContent: 'center' 
+            }}>
+              <ShoppingCart size={20} color={colors.white} />
+            </View>
+            <View>
               <Text style={{ fontSize: fontSize.md, fontWeight: '700', color: colors.white }}>
+                {cart.length === 0 ? 'Panier vide' : `${cart.reduce((sum, i) => sum + i.quantity, 0)} article${cart.reduce((sum, i) => sum + i.quantity, 0) !== 1 ? 's' : ''}`}
+              </Text>
+              {cart.length > 0 && (
+                <Text style={{ fontSize: fontSize.xs, color: 'rgba(255,255,255,0.7)', marginTop: 1 }}>
+                  Appuyez pour voir
+                </Text>
+              )}
+            </View>
+          </View>
+          {total > 0 && (
+            <View style={{ 
+              backgroundColor: 'rgba(255,255,255,0.95)', 
+              paddingHorizontal: spacing.lg, 
+              paddingVertical: spacing.sm, 
+              borderRadius: borderRadius.lg 
+            }}>
+              <Text style={{ fontSize: fontSize.lg, fontWeight: '800', color: colors.primary }}>
                 {total.toFixed(0)} DH
               </Text>
             </View>
@@ -1831,8 +1952,21 @@ export default function CashierSimpleScreen() {
             <ScrollView style={{ maxHeight: height * 0.4 }}>
               {cart.length === 0 ? (
                 <View style={{ padding: spacing.xxxl, alignItems: 'center' }}>
-                  <ShoppingCart size={48} color={colors.borderLight} />
-                  <Text style={{ color: colors.textMuted, fontSize: fontSize.md, marginTop: spacing.md }}>Panier vide</Text>
+                  <View style={{ 
+                    width: 80, 
+                    height: 80, 
+                    borderRadius: 40, 
+                    backgroundColor: colors.background, 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    marginBottom: spacing.md,
+                  }}>
+                    <ShoppingCart size={36} color={colors.textMuted} />
+                  </View>
+                  <Text style={{ color: colors.textPrimary, fontSize: fontSize.lg, fontWeight: '600' }}>Panier vide</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.xs, textAlign: 'center' }}>
+                    Appuyez sur un produit pour l'ajouter
+                  </Text>
                 </View>
               ) : (
                 cart.map((item) => {
@@ -2175,73 +2309,89 @@ export default function CashierSimpleScreen() {
     </TouchableWithoutFeedback>
   </Modal>
 
-      {/* Orders Tracking Modal - Facebook Lite Pro UI */}
+      {/* Orders Tracking Modal - Professional Tablet Grid Design */}
       <Modal
         visible={showOrdersModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        transparent={false}
         onRequestClose={() => setShowOrdersModal(false)}
       >
-        <View style={{ flex: 1, backgroundColor: '#F0F2F5' }}>
-          {/* Header - Clean & Pro */}
-          <View style={{ 
-            backgroundColor: colors.white, 
-            paddingVertical: isPhone ? 14 : 18, 
-            paddingHorizontal: isPhone ? 16 : 24,
-            borderBottomWidth: 1,
-            borderBottomColor: '#E4E6EB',
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.primary }}>
+          {/* Header */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: spacing.xl,
+            paddingVertical: spacing.lg,
           }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <ClipboardList size={ui.iconMd} color="#1877F2" />
-                <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: '#1C1E21' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <ClipboardList size={28} color={colors.white} />
+              <View>
+                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.white }}>
                   Commandes
                 </Text>
+                <Text style={{ fontSize: fontSize.sm, color: 'rgba(255,255,255,0.7)' }}>
+                  {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => setShowOrdersModal(false)}
-                style={{ 
-                  width: ui.iconBtn, 
-                  height: ui.iconBtn, 
-                  borderRadius: ui.iconBtn / 2, 
-                  backgroundColor: '#E4E6EB', 
-                  alignItems: 'center', 
-                  justifyContent: 'center' 
-                }}
-              >
-                <X size={ui.iconSm} color="#65676B" />
-              </TouchableOpacity>
             </View>
+            <TouchableOpacity 
+              onPress={() => setShowOrdersModal(false)}
+              style={{ 
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <X size={24} color={colors.white} />
+            </TouchableOpacity>
           </View>
           
-          {/* Stats Bar - Compact & Pro */}
+          {/* Stats Cards Row */}
           <View style={{ 
             flexDirection: 'row', 
-            backgroundColor: colors.white,
-            paddingVertical: isPhone ? 12 : 16,
-            paddingHorizontal: isPhone ? 12 : 20,
-            marginBottom: 1,
-            gap: isPhone ? 8 : 12,
+            paddingHorizontal: spacing.xl,
+            marginBottom: spacing.lg,
+            gap: spacing.md,
           }}>
             <TouchableOpacity 
               onPress={() => setOrdersFilter('paid')}
               style={{ 
                 flex: 1, 
-                flexDirection: 'row',
+                backgroundColor: ordersFilter === 'paid' ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.15)',
+                borderRadius: 16,
+                padding: spacing.lg,
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: isPhone ? 8 : 10,
-                paddingVertical: isPhone ? 10 : 14,
-                minHeight: isPhone ? 44 : 52,
-                backgroundColor: ordersFilter === 'paid' ? '#E7F3EF' : '#F7F8FA',
-                borderRadius: 10,
-                borderWidth: ordersFilter === 'paid' ? 1.5 : 0,
-                borderColor: '#00A884',
               }}
             >
-              <CheckCircle size={ui.iconSm} color="#00A884" />
-              <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: '#00A884' }}>
+              <View style={{ 
+                width: 48, 
+                height: 48, 
+                borderRadius: 24, 
+                backgroundColor: ordersFilter === 'paid' ? colors.successLight : 'rgba(255,255,255,0.2)', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                marginBottom: spacing.sm,
+              }}>
+                <CheckCircle size={24} color={ordersFilter === 'paid' ? colors.success : colors.white} />
+              </View>
+              <Text style={{ 
+                fontSize: 28, 
+                fontWeight: '800', 
+                color: ordersFilter === 'paid' ? colors.success : colors.white 
+              }}>
                 {todayOrders.filter(o => o.status === 'PAID').length}
+              </Text>
+              <Text style={{ 
+                fontSize: fontSize.sm, 
+                color: ordersFilter === 'paid' ? colors.textSecondary : 'rgba(255,255,255,0.7)',
+                marginTop: 2,
+              }}>
+                Payées
               </Text>
             </TouchableOpacity>
             
@@ -2249,336 +2399,336 @@ export default function CashierSimpleScreen() {
               onPress={() => setOrdersFilter('pending')}
               style={{ 
                 flex: 1, 
-                flexDirection: 'row',
+                backgroundColor: ordersFilter === 'pending' ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.15)',
+                borderRadius: 16,
+                padding: spacing.lg,
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: isPhone ? 8 : 10,
-                paddingVertical: isPhone ? 10 : 14,
-                minHeight: isPhone ? 44 : 52,
-                backgroundColor: ordersFilter === 'pending' ? '#FEF3C7' : '#F7F8FA',
-                borderRadius: 10,
-                borderWidth: ordersFilter === 'pending' ? 1.5 : 0,
-                borderColor: '#F59E0B',
               }}
             >
-              <Clock size={ui.iconSm} color="#F59E0B" />
-              <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: '#F59E0B' }}>
+              <View style={{ 
+                width: 48, 
+                height: 48, 
+                borderRadius: 24, 
+                backgroundColor: ordersFilter === 'pending' ? colors.warningLight : 'rgba(255,255,255,0.2)', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                marginBottom: spacing.sm,
+              }}>
+                <Clock size={24} color={ordersFilter === 'pending' ? colors.warning : colors.white} />
+              </View>
+              <Text style={{ 
+                fontSize: 28, 
+                fontWeight: '800', 
+                color: ordersFilter === 'pending' ? colors.warning : colors.white 
+              }}>
                 {pendingOrders.length}
+              </Text>
+              <Text style={{ 
+                fontSize: fontSize.sm, 
+                color: ordersFilter === 'pending' ? colors.textSecondary : 'rgba(255,255,255,0.7)',
+                marginTop: 2,
+              }}>
+                En attente
               </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
               onPress={() => setOrdersFilter('all')}
               style={{ 
-                flex: 1.2, 
-                flexDirection: 'row',
+                flex: 1, 
+                backgroundColor: ordersFilter === 'all' ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.15)',
+                borderRadius: 16,
+                padding: spacing.lg,
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: isPhone ? 6 : 8,
-                paddingVertical: isPhone ? 10 : 14,
-                minHeight: isPhone ? 44 : 52,
-                backgroundColor: ordersFilter === 'all' ? '#EBF5FF' : '#F7F8FA',
-                borderRadius: 10,
-                borderWidth: ordersFilter === 'all' ? 1.5 : 0,
-                borderColor: '#1877F2',
               }}
             >
-              <Banknote size={ui.iconSm} color="#1877F2" />
-              <Text style={{ fontSize: ui.text.md, fontWeight: '700', color: '#1877F2' }}>
-                {Math.round(dailyStats.totalRevenue)}
+              <View style={{ 
+                width: 48, 
+                height: 48, 
+                borderRadius: 24, 
+                backgroundColor: ordersFilter === 'all' ? colors.primaryLight : 'rgba(255,255,255,0.2)', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                marginBottom: spacing.sm,
+              }}>
+                <Banknote size={24} color={ordersFilter === 'all' ? colors.primary : colors.white} />
+              </View>
+              <Text style={{ 
+                fontSize: 28, 
+                fontWeight: '800', 
+                color: ordersFilter === 'all' ? colors.primary : colors.white 
+              }}>
+                {Math.round(dailyStats.totalRevenue).toLocaleString('fr-FR')}
               </Text>
-              <Text style={{ fontSize: ui.text.xs, fontWeight: '500', color: '#65676B' }}>DH</Text>
+              <Text style={{ 
+                fontSize: fontSize.sm, 
+                color: ordersFilter === 'all' ? colors.textSecondary : 'rgba(255,255,255,0.7)',
+                marginTop: 2,
+              }}>
+                DH Total
+              </Text>
             </TouchableOpacity>
           </View>
           
-          {/* Filter Tabs - Facebook Lite Style */}
-          <View style={{ 
-            flexDirection: 'row', 
-            backgroundColor: colors.white,
-            paddingHorizontal: isPhone ? 12 : 20,
-            paddingVertical: isPhone ? 8 : 12,
-            marginBottom: 8,
-            gap: isPhone ? 6 : 10,
-          }}>
-            {[
-              { key: 'all', label: 'Toutes', icon: List },
-              { key: 'paid', label: 'Payées', icon: CheckCircle },
-              { key: 'pending', label: 'Attente', icon: Clock },
-            ].map((f) => {
-              const IconComponent = f.icon;
-              const isActive = ordersFilter === f.key;
-              return (
-                <TouchableOpacity
-                  key={f.key}
-                  onPress={() => setOrdersFilter(f.key as any)}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: isPhone ? 6 : 8,
-                    paddingVertical: isPhone ? 10 : 14,
-                    minHeight: isPhone ? 44 : 52,
-                    borderRadius: 8,
-                    backgroundColor: isActive ? '#1877F2' : 'transparent',
-                  }}
-                >
-                  <IconComponent size={ui.iconSm} color={isActive ? '#FFFFFF' : '#65676B'} />
-                  <Text style={{ 
-                    fontSize: ui.text.sm, 
-                    fontWeight: '600', 
-                    color: isActive ? '#FFFFFF' : '#65676B' 
+          {/* Orders Grid Content */}
+          <View style={{ flex: 1, backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+            <FlatList
+              data={(() => {
+                let orders = ordersFilter === 'pending' 
+                  ? pendingOrders 
+                  : ordersFilter === 'paid' 
+                    ? todayOrders.filter(o => o.status === 'PAID')
+                    : [...todayOrders, ...pendingOrders.filter(p => !todayOrders.find(t => t.id === p.id))];
+                return orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              })()}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
+              columnWrapperStyle={{ gap: spacing.md }}
+              ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
+              renderItem={({ item }) => (
+                <View style={{
+                  flex: 1,
+                  backgroundColor: colors.white,
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                  ...shadows.md,
+                }}>
+                  {/* Order Header */}
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    padding: spacing.lg,
+                    backgroundColor: item.status === 'PAID' ? colors.successLight : colors.warningLight,
                   }}>
-                    {f.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          
-          {/* Orders List - Clean Cards */}
-          <FlatList
-            data={(() => {
-              let orders = ordersFilter === 'pending' 
-                ? pendingOrders 
-                : ordersFilter === 'paid' 
-                  ? todayOrders.filter(o => o.status === 'PAID')
-                  : [...todayOrders, ...pendingOrders.filter(p => !todayOrders.find(t => t.id === p.id))];
-              return orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            })()}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ paddingHorizontal: isPhone ? 12 : 20, paddingBottom: 100 }}
-            ItemSeparatorComponent={() => <View style={{ height: isPhone ? 6 : 10 }} />}
-            renderItem={({ item }) => (
-              <View style={{
-                backgroundColor: colors.white,
-                borderRadius: 12,
-                overflow: 'hidden',
-                borderLeftWidth: 4,
-                borderLeftColor: item.status === 'PAID' ? '#00A884' : '#F59E0B',
-              }}>
-                {/* Order Card Content */}
-                <TouchableOpacity
-                  onPress={() => {
-                    setSelectedOrderForReceipt(item);
-                    setShowReceiptPreviewModal(true);
-                  }}
-                  activeOpacity={0.7}
-                  style={{ padding: isPhone ? 14 : 18 }}
-                >
-                  {/* Top Row */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: isPhone ? 12 : 16, flex: 1 }}>
-                      {/* Order Number Circle */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
                       <View style={{
-                        width: isPhone ? 44 : 56,
-                        height: isPhone ? 44 : 56,
-                        borderRadius: isPhone ? 22 : 28,
-                        backgroundColor: item.status === 'PAID' ? '#E7F3EF' : '#FEF3C7',
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: colors.white,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}>
                         <Text style={{ 
-                          fontSize: ui.text.md, 
+                          fontSize: fontSize.lg, 
                           fontWeight: '800', 
-                          color: item.status === 'PAID' ? '#00A884' : '#D97706' 
+                          color: item.status === 'PAID' ? colors.success : colors.warning 
                         }}>
                           {item.orderNumber || '-'}
                         </Text>
                       </View>
-                      
-                      {/* Order Info */}
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                           {item.tableNumber === 0 ? (
-                            <Coffee size={ui.iconSm} color="#65676B" />
+                            <Coffee size={16} color={colors.textSecondary} />
                           ) : (
-                            <Users size={ui.iconSm} color="#65676B" />
+                            <Users size={16} color={colors.textSecondary} />
                           )}
-                          <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: '#1C1E21' }}>
+                          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>
                             {item.tableNumber === 0 ? 'Comptoir' : `Table ${item.tableNumber}`}
                           </Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                          <Clock size={isPhone ? 12 : 14} color="#8A8D91" />
-                          <Text style={{ fontSize: ui.text.xs, color: '#8A8D91' }}>
-                            {item.createdAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                          </Text>
-                          <Text style={{ fontSize: ui.text.xs, color: '#8A8D91' }}>•</Text>
-                          <Text style={{ fontSize: ui.text.xs, color: '#8A8D91' }}>
-                            {item.items.reduce((s, i) => s + i.quantity, 0)} articles
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    
-                    {/* Amount */}
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ fontSize: ui.text.xl, fontWeight: '800', color: item.status === 'PAID' ? '#00A884' : '#1C1E21' }}>
-                        {Math.round(item.totalAmount)}
-                      </Text>
-                      <Text style={{ fontSize: ui.text.xs, color: '#8A8D91', fontWeight: '500' }}>MAD</Text>
-                    </View>
-                  </View>
-                  
-                  {/* Status & Payment Row */}
-                  <View style={{ 
-                    flexDirection: 'row', 
-                    alignItems: 'center', 
-                    marginTop: isPhone ? 10 : 14,
-                    gap: isPhone ? 6 : 10,
-                  }}>
-                    <View style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4,
-                      paddingHorizontal: isPhone ? 8 : 12,
-                      paddingVertical: isPhone ? 4 : 6,
-                      borderRadius: 6,
-                      backgroundColor: item.status === 'PAID' ? '#E7F3EF' : '#FEF3C7',
-                    }}>
-                      {item.status === 'PAID' ? (
-                        <Check size={isPhone ? 12 : 16} color="#00A884" strokeWidth={3} />
-                      ) : (
-                        <Clock size={isPhone ? 12 : 16} color="#D97706" />
-                      )}
-                      <Text style={{ 
-                        fontSize: ui.text.xs, 
-                        fontWeight: '600', 
-                        color: item.status === 'PAID' ? '#00A884' : '#D97706' 
-                      }}>
-                        {item.status === 'PAID' ? 'Payée' : 'En attente'}
-                      </Text>
-                    </View>
-                    
-                    {item.paymentMethod && (
-                      <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 4,
-                        paddingHorizontal: isPhone ? 8 : 12,
-                        paddingVertical: isPhone ? 4 : 6,
-                        borderRadius: 6,
-                        backgroundColor: '#F7F8FA',
-                      }}>
-                        {item.paymentMethod === 'cash' ? (
-                          <Banknote size={isPhone ? 12 : 16} color="#166534" />
-                        ) : (
-                          <CreditCard size={isPhone ? 12 : 16} color="#1D4ED8" />
-                        )}
-                        <Text style={{ 
-                          fontSize: ui.text.xs, 
-                          fontWeight: '500', 
-                          color: '#65676B' 
-                        }}>
-                          {item.paymentMethod === 'cash' ? 'Espèces' : 'Carte'}
+                        <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 }}>
+                          {item.createdAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </Text>
                       </View>
+                    </View>
+                    {item.status === 'PAID' ? (
+                      <CheckCircle size={24} color={colors.success} />
+                    ) : (
+                      <Clock size={24} color={colors.warning} />
                     )}
-                    
-                    <View style={{ flex: 1 }} />
-                    
-                    <ChevronRight size={ui.iconSm} color="#8A8D91" />
                   </View>
-                </TouchableOpacity>
-                
-                {/* Quick Actions Bar */}
-                <View style={{ 
-                  flexDirection: 'row', 
-                  borderTopWidth: 1, 
-                  borderTopColor: '#F0F2F5',
-                  backgroundColor: '#FAFBFC',
-                }}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSelectedOrderForReceipt(item);
-                      setShowReceiptPreviewModal(true);
-                    }}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: isPhone ? 6 : 8,
-                      paddingVertical: isPhone ? 11 : 14,
-                      minHeight: isPhone ? 44 : 52,
-                    }}
-                  >
-                    <Eye size={ui.iconSm} color="#1877F2" />
-                    <Text style={{ fontSize: ui.text.sm, fontWeight: '600', color: '#1877F2' }}>Voir</Text>
-                  </TouchableOpacity>
                   
-                  <View style={{ width: 1, backgroundColor: '#E4E6EB', marginVertical: 8 }} />
+                  {/* Order Details */}
+                  <View style={{ padding: spacing.lg }}>
+                    {/* Amount */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: spacing.md }}>
+                      <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>
+                        {item.items.reduce((s, i) => s + i.quantity, 0)} article{item.items.reduce((s, i) => s + i.quantity, 0) > 1 ? 's' : ''}
+                      </Text>
+                      <Text style={{ fontSize: 28, fontWeight: '800', color: colors.textPrimary }}>
+                        {Math.round(item.totalAmount)} <Text style={{ fontSize: fontSize.md, fontWeight: '600' }}>DH</Text>
+                      </Text>
+                    </View>
+                    
+                    {/* Payment Method */}
+                    {item.paymentMethod && (
+                      <View style={{ 
+                        flexDirection: 'row', 
+                        alignItems: 'center', 
+                        gap: spacing.sm,
+                        marginBottom: spacing.md,
+                      }}>
+                        <View style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: spacing.xs,
+                          backgroundColor: item.paymentMethod === 'cash' ? colors.successLight : colors.primaryLight,
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: spacing.xs,
+                          borderRadius: borderRadius.full,
+                        }}>
+                          {item.paymentMethod === 'cash' ? (
+                            <Banknote size={14} color={colors.success} />
+                          ) : (
+                            <CreditCard size={14} color={colors.primary} />
+                          )}
+                          <Text style={{ 
+                            fontSize: fontSize.xs, 
+                            fontWeight: '600', 
+                            color: item.paymentMethod === 'cash' ? colors.success : colors.primary 
+                          }}>
+                            {item.paymentMethod === 'cash' ? 'Espèces' : 'Carte'}
+                          </Text>
+                        </View>
+                        {item.printed && (
+                          <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: spacing.xs,
+                            backgroundColor: colors.background,
+                            paddingHorizontal: spacing.md,
+                            paddingVertical: spacing.xs,
+                            borderRadius: borderRadius.full,
+                          }}>
+                            <Printer size={14} color={colors.textMuted} />
+                            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>Imprimé</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
                   
-                  <TouchableOpacity
-                    onPress={() => handlePrintReceipt(item)}
-                    disabled={printing}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: isPhone ? 6 : 8,
-                      paddingVertical: isPhone ? 11 : 14,
-                      minHeight: isPhone ? 44 : 52,
-                    }}
-                  >
-                    <Printer size={ui.iconSm} color={item.printed ? '#8A8D91' : '#00A884'} />
-                    <Text style={{ fontSize: ui.text.sm, fontWeight: '600', color: item.printed ? '#8A8D91' : '#00A884' }}>
-                      {item.printed ? 'Réimpr.' : 'Imprimer'}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  {item.status === 'PENDING' && (
-                    <>
-                      <View style={{ width: 1, backgroundColor: '#E4E6EB', marginVertical: 8 }} />
+                  {/* Action Buttons - Large for easy tapping */}
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    borderTopWidth: 1, 
+                    borderTopColor: colors.borderLight,
+                  }}>
+                    {/* View Button */}
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedOrderForReceipt(item);
+                        setShowReceiptPreviewModal(true);
+                      }}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: spacing.sm,
+                        paddingVertical: spacing.lg,
+                        minHeight: 56,
+                      }}
+                    >
+                      <Eye size={20} color={colors.primary} />
+                      <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.primary }}>Détails</Text>
+                    </TouchableOpacity>
+                    
+                    <View style={{ width: 1, backgroundColor: colors.borderLight }} />
+                    
+                    {/* Print Button - Admin Only */}
+                    {hasPermission(user?.role as UserRole, 'print_daily_report') ? (
                       <TouchableOpacity
-                        onPress={() => {
-                          recallOrder(item);
-                          setShowOrdersModal(false);
-                        }}
+                        onPress={() => handlePrintReceipt(item)}
+                        disabled={printing}
                         style={{
                           flex: 1,
                           flexDirection: 'row',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: isPhone ? 6 : 8,
-                          paddingVertical: isPhone ? 11 : 14,
-                          minHeight: isPhone ? 44 : 52,
-                          backgroundColor: '#FEF3C7',
+                          gap: spacing.sm,
+                          paddingVertical: spacing.lg,
+                          minHeight: 56,
+                          backgroundColor: item.printed ? colors.background : colors.successLight,
                         }}
                       >
-                        <Play size={ui.iconSm} color="#D97706" />
-                        <Text style={{ fontSize: ui.text.sm, fontWeight: '600', color: '#D97706' }}>Reprendre</Text>
+                        <Printer size={20} color={item.printed ? colors.textMuted : colors.success} />
+                        <Text style={{ 
+                          fontSize: fontSize.md, 
+                          fontWeight: '600', 
+                          color: item.printed ? colors.textMuted : colors.success 
+                        }}>
+                          {item.printed ? 'Réimpr.' : 'Imprimer'}
+                        </Text>
                       </TouchableOpacity>
-                    </>
-                  )}
+                    ) : (
+                      /* Cashier sees disabled print indicator */
+                      <View style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: spacing.sm,
+                        paddingVertical: spacing.lg,
+                        minHeight: 56,
+                        backgroundColor: colors.background,
+                      }}>
+                        <Lock size={18} color={colors.textMuted} />
+                        <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>Admin</Text>
+                      </View>
+                    )}
+                    
+                    {/* Resume Button for Pending Orders */}
+                    {item.status === 'PENDING' && (
+                      <>
+                        <View style={{ width: 1, backgroundColor: colors.borderLight }} />
+                        <TouchableOpacity
+                          onPress={() => {
+                            recallOrder(item);
+                            setShowOrdersModal(false);
+                          }}
+                          style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: spacing.sm,
+                            paddingVertical: spacing.lg,
+                            minHeight: 56,
+                            backgroundColor: colors.warningLight,
+                          }}
+                        >
+                          <Play size={20} color={colors.warning} />
+                          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: '#B45309' }}>Reprendre</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
                 </View>
-              </View>
-            )}
-            ListEmptyComponent={() => (
-              <View style={{ paddingVertical: isPhone ? 60 : 80, alignItems: 'center' }}>
-                <View style={{
-                  width: isPhone ? 64 : 80,
-                  height: isPhone ? 64 : 80,
-                  borderRadius: isPhone ? 32 : 40,
-                  backgroundColor: '#F0F2F5',
+              )}
+              ListEmptyComponent={() => (
+                <View style={{ 
+                  flex: 1, 
+                  paddingVertical: 80, 
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: 16,
                 }}>
-                  <ClipboardList size={ui.iconLg} color="#8A8D91" />
+                  <View style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 40,
+                    backgroundColor: colors.borderLight,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: spacing.lg,
+                  }}>
+                    <ClipboardList size={36} color={colors.textMuted} />
+                  </View>
+                  <Text style={{ fontSize: fontSize.lg, fontWeight: '600', color: colors.textPrimary }}>
+                    Aucune commande
+                  </Text>
+                  <Text style={{ fontSize: fontSize.md, color: colors.textMuted, marginTop: spacing.xs }}>
+                    Les commandes apparaîtront ici
+                  </Text>
                 </View>
-                <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: '#1C1E21' }}>
-                  Aucune commande
-                </Text>
-                <Text style={{ fontSize: ui.text.sm, color: '#8A8D91', marginTop: 4 }}>
-                  Les commandes apparaîtront ici
-                </Text>
-              </View>
-            )}
-          />
-        </View>
+              )}
+            />
+          </View>
+        </SafeAreaView>
       </Modal>
 
       {/* Receipt Preview Modal - Pro Design */}
@@ -2778,34 +2928,52 @@ export default function CashierSimpleScreen() {
                 </View>
               </View>
               
-              {/* Print Button */}
-              <TouchableOpacity
-                onPress={() => {
-                  if (selectedOrderForReceipt) {
-                    handlePrintReceipt(selectedOrderForReceipt);
-                  }
-                }}
-                disabled={printing}
-                style={{
+              {/* Print Button - Admin Only */}
+              {hasPermission(user?.role as UserRole, 'print_daily_report') ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (selectedOrderForReceipt) {
+                      handlePrintReceipt(selectedOrderForReceipt);
+                    }
+                  }}
+                  disabled={printing}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 12,
+                    backgroundColor: '#00A884',
+                    paddingVertical: isPhone ? 14 : 18,
+                    minHeight: isPhone ? 52 : 60,
+                    borderRadius: 10,
+                  }}
+                >
+                  {printing ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Printer size={ui.iconMd} color={colors.white} />
+                  )}
+                  <Text style={{ fontSize: ui.text.md, fontWeight: '700', color: colors.white }}>
+                    {printing ? 'Impression...' : 'Imprimer le reçu'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 12,
-                  backgroundColor: '#00A884',
+                  backgroundColor: colors.borderLight,
                   paddingVertical: isPhone ? 14 : 18,
                   minHeight: isPhone ? 52 : 60,
                   borderRadius: 10,
-                }}
-              >
-                {printing ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Printer size={ui.iconMd} color={colors.white} />
-                )}
-                <Text style={{ fontSize: ui.text.md, fontWeight: '700', color: colors.white }}>
-                  {printing ? 'Impression...' : 'Imprimer le reçu'}
-                </Text>
-              </TouchableOpacity>
+                }}>
+                  <Lock size={20} color={colors.textMuted} />
+                  <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.textMuted }}>
+                    Impression réservée aux admins
+                  </Text>
+                </View>
+              )}
               
               {/* Footer */}
               <View style={{ alignItems: 'center', paddingVertical: 20 }}>
@@ -3147,273 +3315,286 @@ export default function CashierSimpleScreen() {
         </View>
       </Modal>
 
-      {/* Daily Report Modal - Facebook Lite Style */}
+      {/* Daily Report Modal - Professional POS Design */}
       <Modal
         visible={showReportModal}
-        animationType="fade"
-        transparent={true}
+        animationType="slide"
+        transparent={false}
         onRequestClose={() => setShowReportModal(false)}
       >
-        <View style={{
-          flex: 1,
-          backgroundColor: colors.overlay,
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: isPhone ? 16 : 32,
-        }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.primary }}>
+          {/* Header */}
           <View style={{
-            backgroundColor: colors.surface,
-            borderRadius: 20,
-            width: '100%',
-            maxWidth: isLargeTablet ? 500 : 420,
-            overflow: 'hidden',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
           }}>
-            {/* Header - Clean Facebook Lite style */}
-            <View style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              paddingHorizontal: isPhone ? 16 : 24,
-              paddingVertical: isPhone ? 12 : 16,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.borderLight,
-            }}>
-              <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: colors.textPrimary }}>
-                Rapport du jour
-              </Text>
-              <TouchableOpacity 
-                onPress={() => setShowReportModal(false)}
-                style={{ 
-                  width: ui.iconBtn,
-                  height: ui.iconBtn,
-                  borderRadius: ui.iconBtn / 2,
-                  backgroundColor: colors.background,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <X size={ui.iconSm} color={colors.textSecondary} />
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <BarChart3 size={24} color={colors.white} />
+              <View>
+                <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.white }}>
+                  Rapport du jour
+                </Text>
+                <Text style={{ fontSize: fontSize.sm, color: 'rgba(255,255,255,0.7)' }}>
+                  {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </Text>
+              </View>
             </View>
-            
-            {/* Content */}
-            <View style={{ padding: isPhone ? 16 : 24 }}>
-              {/* Date badge */}
-              <Text style={{ 
-                fontSize: ui.text.sm, 
-                color: colors.textSecondary, 
-                textAlign: 'center',
-                marginBottom: isPhone ? 16 : 20,
-              }}>
-                {new Date().toLocaleDateString('fr-FR', { 
-                  weekday: 'long', 
-                  day: 'numeric',
-                  month: 'long',
-                })}
-              </Text>
-              
-              {/* Main Total - Hero number */}
-              <View style={{ 
-                backgroundColor: colors.successLight,
-                borderRadius: 14,
-                padding: isPhone ? 20 : 28,
+            <TouchableOpacity 
+              onPress={() => setShowReportModal(false)}
+              style={{ 
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: 'rgba(255,255,255,0.2)',
                 alignItems: 'center',
-                marginBottom: isPhone ? 12 : 16,
-              }}>
-                <Text style={{ fontSize: ui.text.sm, color: colors.success, marginBottom: 4 }}>
-                  Total des ventes
+                justifyContent: 'center',
+              }}
+            >
+              <X size={22} color={colors.white} />
+            </TouchableOpacity>
+          </View>
+          
+          {/* Hero Revenue Card */}
+          <View style={{
+            marginHorizontal: spacing.lg,
+            marginBottom: spacing.lg,
+            backgroundColor: 'rgba(255,255,255,0.15)',
+            borderRadius: 20,
+            padding: spacing.xl,
+            alignItems: 'center',
+          }}>
+            <Text style={{ fontSize: fontSize.sm, color: 'rgba(255,255,255,0.8)', marginBottom: spacing.xs }}>
+              Chiffre d'affaires
+            </Text>
+            <Text style={{ fontSize: 52, fontWeight: '800', color: colors.white }}>
+              {Math.round(dailyStats.totalRevenue).toLocaleString('fr-FR')}
+            </Text>
+            <Text style={{ fontSize: fontSize.lg, fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>
+              DH
+            </Text>
+            
+            {/* Quick stats row */}
+            <View style={{ 
+              flexDirection: 'row', 
+              marginTop: spacing.lg,
+              gap: spacing.xl,
+            }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: fontSize.xs, color: 'rgba(255,255,255,0.7)' }}>Commandes</Text>
+                <Text style={{ fontSize: fontSize.xxl, fontWeight: '700', color: colors.white }}>
+                  {dailyStats.paidOrders}
                 </Text>
-                <Text style={{ fontSize: isPhone ? 36 : 48, fontWeight: '700', color: colors.success }}>
-                  {Math.round(dailyStats.totalRevenue)}
+              </View>
+              <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: fontSize.xs, color: 'rgba(255,255,255,0.7)' }}>Panier moyen</Text>
+                <Text style={{ fontSize: fontSize.xxl, fontWeight: '700', color: colors.white }}>
+                  {dailyStats.paidOrders > 0 ? Math.round(dailyStats.totalRevenue / dailyStats.paidOrders) : 0}
                 </Text>
-                <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.success }}>
-                  MAD
+              </View>
+              <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: fontSize.xs, color: 'rgba(255,255,255,0.7)' }}>En attente</Text>
+                <Text style={{ fontSize: fontSize.xxl, fontWeight: '700', color: pendingOrders.length > 0 ? '#FCD34D' : colors.white }}>
+                  {pendingOrders.length}
                 </Text>
-              </View>
-              
-              {/* Net Profit - after expenses */}
-              <View style={{ 
-                flexDirection: 'row', 
-                gap: isPhone ? 10 : 14,
-                marginBottom: isPhone ? 16 : 20,
-              }}>
-                <View style={{ 
-                  flex: 1,
-                  backgroundColor: colors.errorLight,
-                  borderRadius: 12,
-                  padding: isPhone ? 12 : 16,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: ui.text.xs, color: colors.error }}>Dépenses</Text>
-                  <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: colors.error }}>
-                    -{Math.round(todayExpenseTotal)}
-                  </Text>
-                </View>
-                
-                <View style={{ 
-                  flex: 1,
-                  backgroundColor: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? colors.successLight : colors.errorLight,
-                  borderRadius: 12,
-                  padding: isPhone ? 12 : 16,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: ui.text.xs, color: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? colors.success : colors.error }}>
-                    Bénéfice Net
-                  </Text>
-                  <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? colors.success : colors.error }}>
-                    {Math.round(dailyStats.totalRevenue - todayExpenseTotal)}
-                  </Text>
-                </View>
-              </View>
-              
-              {/* Payment breakdown - Simple row */}
-              <View style={{ 
-                flexDirection: 'row', 
-                gap: isPhone ? 10 : 14,
-                marginBottom: isPhone ? 16 : 20,
-              }}>
-                <View style={{ 
-                  flex: 1,
-                  backgroundColor: colors.background,
-                  borderRadius: 12,
-                  padding: isPhone ? 12 : 16,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: ui.text.xs, color: colors.textSecondary }}>Espèces</Text>
-                  <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: colors.textPrimary }}>
-                    {Math.round(dailyStats.cashRevenue)}
-                  </Text>
-                </View>
-                
-                <View style={{ 
-                  flex: 1,
-                  backgroundColor: colors.background,
-                  borderRadius: 12,
-                  padding: isPhone ? 12 : 16,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: ui.text.xs, color: colors.textSecondary }}>Carte</Text>
-                  <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: colors.textPrimary }}>
-                    {Math.round(dailyStats.cardRevenue)}
-                  </Text>
-                </View>
-              </View>
-              
-              {/* Stats row - Orders count */}
-              <View style={{ 
-                flexDirection: 'row', 
-                gap: isPhone ? 10 : 14,
-                marginBottom: isPhone ? 16 : 20,
-              }}>
-                <View style={{ 
-                  flex: 1,
-                  backgroundColor: colors.primaryLight,
-                  borderRadius: 12,
-                  padding: isPhone ? 12 : 16,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: ui.text.xs, color: colors.primary }}>Commandes</Text>
-                  <Text style={{ fontSize: isPhone ? 22 : 28, fontWeight: '700', color: colors.primary }}>
-                    {dailyStats.paidOrders}
-                  </Text>
-                </View>
-                
-                <View style={{ 
-                  flex: 1,
-                  backgroundColor: colors.warningLight,
-                  borderRadius: 12,
-                  padding: isPhone ? 12 : 16,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: ui.text.xs, color: '#92400E' }}>En attente</Text>
-                  <Text style={{ fontSize: isPhone ? 22 : 28, fontWeight: '700', color: colors.warning }}>
-                    {pendingOrders.length}
-                  </Text>
-                </View>
-                
-                <View style={{ 
-                  flex: 1,
-                  backgroundColor: colors.background,
-                  borderRadius: 12,
-                  padding: isPhone ? 12 : 16,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: ui.text.xs, color: colors.textSecondary }}>Moy.</Text>
-                  <Text style={{ fontSize: isPhone ? 22 : 28, fontWeight: '700', color: colors.textPrimary }}>
-                    {dailyStats.paidOrders > 0 
-                      ? Math.round(dailyStats.totalRevenue / dailyStats.paidOrders) 
-                      : 0}
-                  </Text>
-                </View>
-              </View>
-              
-              {/* Stock alerts summary */}
-              {lowStockProducts.length > 0 && (
-                <View style={{ 
-                  backgroundColor: colors.warningLight,
-                  borderRadius: 12,
-                  padding: isPhone ? 12 : 16,
-                  marginBottom: isPhone ? 16 : 20,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                }}>
-                  <AlertTriangle size={ui.iconSm} color={colors.warning} />
-                  <Text style={{ fontSize: ui.text.sm, color: '#92400E', flex: 1 }}>
-                    {lowStockProducts.filter(p => p.stockQuantity === 0).length > 0 
-                      ? `${lowStockProducts.filter(p => p.stockQuantity === 0).length} produit(s) épuisé(s), `
-                      : ''}
-                    {lowStockProducts.filter(p => p.stockQuantity > 0).length} produit(s) stock bas
-                  </Text>
-                </View>
-              )}
-              
-              {/* Action buttons */}
-              <View style={{ flexDirection: 'row', gap: isPhone ? 10 : 14 }}>
-                {/* Print Report button - Admin only */}
-                {hasPermission(user?.role as UserRole, 'print_daily_report') && (
-                  <TouchableOpacity
-                    onPress={handlePrintDailyReport}
-                    style={{
-                      flex: 1,
-                      backgroundColor: colors.success,
-                      paddingVertical: isPhone ? 14 : 16,
-                      minHeight: isPhone ? 48 : 56,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      flexDirection: 'row',
-                      justifyContent: 'center',
-                      gap: 10,
-                    }}
-                  >
-                    <Printer size={ui.iconSm} color={colors.white} />
-                    <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.white }}>
-                      Imprimer
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                
-                {/* Close button */}
-                <TouchableOpacity
-                  onPress={() => setShowReportModal(false)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: colors.primary,
-                    paddingVertical: isPhone ? 14 : 16,
-                    minHeight: isPhone ? 48 : 56,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.white }}>
-                    Fermer
-                  </Text>
-                </TouchableOpacity>
               </View>
             </View>
           </View>
-        </View>
+          
+          {/* Content Area */}
+          <ScrollView 
+            style={{ flex: 1, backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+            contentContainerStyle={{ padding: spacing.lg }}
+          >
+            {/* Payment Methods */}
+            <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.md, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Moyens de paiement
+            </Text>
+            <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl }}>
+              <View style={{ 
+                flex: 1,
+                backgroundColor: colors.white,
+                borderRadius: 16,
+                padding: spacing.lg,
+                alignItems: 'center',
+                ...shadows.sm,
+              }}>
+                <View style={{ 
+                  width: 44, 
+                  height: 44, 
+                  borderRadius: 22, 
+                  backgroundColor: colors.successLight, 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  marginBottom: spacing.sm,
+                }}>
+                  <Banknote size={22} color={colors.success} />
+                </View>
+                <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>Espèces</Text>
+                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
+                  {Math.round(dailyStats.cashRevenue).toLocaleString('fr-FR')} <Text style={{ fontSize: fontSize.sm }}>DH</Text>
+                </Text>
+              </View>
+              
+              <View style={{ 
+                flex: 1,
+                backgroundColor: colors.white,
+                borderRadius: 16,
+                padding: spacing.lg,
+                alignItems: 'center',
+                ...shadows.sm,
+              }}>
+                <View style={{ 
+                  width: 44, 
+                  height: 44, 
+                  borderRadius: 22, 
+                  backgroundColor: colors.primaryLight, 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  marginBottom: spacing.sm,
+                }}>
+                  <CreditCard size={22} color={colors.primary} />
+                </View>
+                <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>Carte</Text>
+                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
+                  {Math.round(dailyStats.cardRevenue).toLocaleString('fr-FR')} <Text style={{ fontSize: fontSize.sm }}>DH</Text>
+                </Text>
+              </View>
+            </View>
+            
+            {/* Profit Section */}
+            <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.md, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Rentabilité
+            </Text>
+            <View style={{ 
+              backgroundColor: colors.white,
+              borderRadius: 16,
+              padding: spacing.lg,
+              marginBottom: spacing.xl,
+              ...shadows.sm,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                <Text style={{ fontSize: fontSize.md, color: colors.textSecondary }}>Revenus</Text>
+                <Text style={{ fontSize: fontSize.lg, fontWeight: '600', color: colors.success }}>
+                  +{Math.round(dailyStats.totalRevenue).toLocaleString('fr-FR')} DH
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                <Text style={{ fontSize: fontSize.md, color: colors.textSecondary }}>Dépenses</Text>
+                <Text style={{ fontSize: fontSize.lg, fontWeight: '600', color: colors.error }}>
+                  -{Math.round(todayExpenseTotal).toLocaleString('fr-FR')} DH
+                </Text>
+              </View>
+              <View style={{ height: 1, backgroundColor: colors.borderLight, marginVertical: spacing.md }} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary }}>Bénéfice net</Text>
+                <Text style={{ 
+                  fontSize: fontSize.xxl, 
+                  fontWeight: '800', 
+                  color: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? colors.success : colors.error 
+                }}>
+                  {Math.round(dailyStats.totalRevenue - todayExpenseTotal).toLocaleString('fr-FR')} DH
+                </Text>
+              </View>
+            </View>
+            
+            {/* Stock Alerts */}
+            {lowStockProducts.length > 0 && (
+              <>
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.md, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Alertes stock
+                </Text>
+                <View style={{ 
+                  backgroundColor: colors.white,
+                  borderRadius: 16,
+                  padding: spacing.lg,
+                  marginBottom: spacing.xl,
+                  borderLeftWidth: 4,
+                  borderLeftColor: colors.warning,
+                  ...shadows.sm,
+                }}>
+                  {lowStockProducts.filter(p => p.stockQuantity === 0).length > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error }} />
+                      <Text style={{ fontSize: fontSize.md, color: colors.error, fontWeight: '600' }}>
+                        {lowStockProducts.filter(p => p.stockQuantity === 0).length} produit(s) épuisé(s)
+                      </Text>
+                    </View>
+                  )}
+                  {lowStockProducts.filter(p => p.stockQuantity > 0).length > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.warning }} />
+                      <Text style={{ fontSize: fontSize.md, color: '#92400E' }}>
+                        {lowStockProducts.filter(p => p.stockQuantity > 0).length} produit(s) stock bas
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
+            
+            {/* Bottom padding for buttons */}
+            <View style={{ height: 80 }} />
+          </ScrollView>
+          
+          {/* Fixed Bottom Actions */}
+          <View style={{ 
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: colors.white,
+            padding: spacing.lg,
+            paddingBottom: spacing.xl,
+            borderTopWidth: 1,
+            borderTopColor: colors.borderLight,
+            flexDirection: 'row',
+            gap: spacing.md,
+          }}>
+            {hasPermission(user?.role as UserRole, 'print_daily_report') && (
+              <TouchableOpacity
+                onPress={handlePrintDailyReport}
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.white,
+                  paddingVertical: spacing.lg,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: spacing.sm,
+                  borderWidth: 2,
+                  borderColor: colors.primary,
+                }}
+              >
+                <Printer size={20} color={colors.primary} />
+                <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.primary }}>
+                  Imprimer
+                </Text>
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity
+              onPress={() => setShowReportModal(false)}
+              style={{
+                flex: 1,
+                backgroundColor: colors.primary,
+                paddingVertical: spacing.lg,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.white }}>
+                Fermer
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </Modal>
 
       {/* Admin Panel */}
