@@ -1689,7 +1689,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                       
                       <View>
                         <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 6 }}>
-                          Seuil d'alerte (stock bas)
+                          Seuil d&apos;alerte (stock bas)
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           <AlertTriangle size={18} color={colors.warning} />
