@@ -999,7 +999,7 @@ export const offlineOrderService = {
       result.push({
         id: order.id,
         orderNumber: order.order_number,
-        tableNumber: order.table_number || undefined,
+        tableNumber: order.table_number ?? 0,
         customerName: order.customer_name || undefined,
         status: order.status as OfflineOrder['status'],
         totalAmount: order.total_amount,
@@ -1070,7 +1070,7 @@ export const offlineOrderService = {
       result.push({
         id: order.id,
         orderNumber: order.order_number,
-        tableNumber: order.table_number || undefined,
+        tableNumber: order.table_number ?? 0,
         customerName: order.customer_name || undefined,
         status: order.status as OfflineOrder['status'],
         totalAmount: order.total_amount,
@@ -1223,7 +1223,7 @@ export const offlineOrderService = {
       result.push({
         id: order.id,
         orderNumber: order.order_number,
-        tableNumber: order.table_number || undefined,
+        tableNumber: order.table_number ?? 0,
         customerName: order.customer_name || undefined,
         status: order.status as OfflineOrder['status'],
         totalAmount: order.total_amount,

@@ -207,6 +207,7 @@ class UnifiedPrinterServiceClass {
   private connectionListeners: ((status: ConnectionStatus, device?: PrinterDevice | null) => void)[] = [];
   
   // Native modules (when available)
+  private ThermalPrinterModule: any = null;  // Our custom native module
   private BluetoothManager: any = null;
   private BluetoothEscposPrinter: any = null;
   private TcpSocket: any = null;
@@ -233,20 +234,28 @@ class UnifiedPrinterServiceClass {
       // Load saved settings
       await this.loadSettings();
 
-      // Try to load native modules
+      // Try to load native modules - PRIORITY: ThermalPrinterModule (our Kotlin module)
       const { 
+        ThermalPrinterModule: TPM,
         BluetoothManager: BM, 
         BluetoothEscposPrinter: BEP,
         TcpSockets: TCP,
         UsbSerialManager: USB,
       } = NativeModules;
 
-      if (BM && BEP) {
+      // Use our custom ThermalPrinterModule FIRST (supports USB, BT, WiFi)
+      if (TPM) {
+        this.ThermalPrinterModule = TPM;
+        this.eventEmitter = new NativeEventEmitter(TPM);
+        this.setupThermalPrinterEventListeners();
+        console.log('✅ ThermalPrinterModule (native) initialized - USB/BT/WiFi');
+      } else if (BM && BEP) {
+        // Fallback to legacy react-native-bluetooth-escpos-printer
         this.BluetoothManager = BM;
         this.BluetoothEscposPrinter = BEP;
         this.eventEmitter = new NativeEventEmitter(BM);
         this.setupBluetoothEventListeners();
-        console.log('✅ Bluetooth module initialized');
+        console.log('✅ Legacy Bluetooth module initialized');
       } else {
         console.log('⚠️ Bluetooth modules not available - simulation mode');
       }
@@ -303,7 +312,63 @@ class UnifiedPrinterServiceClass {
   }
 
   // ============================================================================
-  // BLUETOOTH EVENT LISTENERS
+  // THERMAL PRINTER MODULE EVENT LISTENERS (our native Kotlin module)
+  // ============================================================================
+
+  private setupThermalPrinterEventListeners(): void {
+    if (!this.eventEmitter) return;
+
+    this.eventEmitter.addListener('onBluetoothDeviceFound', (device: any) => {
+      console.log('🔍 BT device found:', device.name);
+    });
+
+    this.eventEmitter.addListener('onDiscoveryFinished', () => {
+      console.log('🔍 BT discovery finished');
+    });
+
+    this.eventEmitter.addListener('onConnected', (data: any) => {
+      console.log('✅ ThermalPrinterModule connected:', data);
+      this.connection.isConnected = true;
+      this.connection.isConnecting = false;
+      this.connection.type = data?.transport || 'bluetooth';
+      this.connection.lastError = null;
+      this.reconnectAttempts = 0;
+      this.notifyListeners('connected', this.connection.device);
+      this.processQueue();
+    });
+
+    this.eventEmitter.addListener('onDisconnected', () => {
+      console.log('⚠️ ThermalPrinterModule disconnected');
+      this.connection.isConnected = false;
+      this.notifyListeners('disconnected');
+    });
+
+    this.eventEmitter.addListener('onError', (error: any) => {
+      console.error('❌ ThermalPrinterModule error:', error);
+      this.connection.lastError = error?.message || 'Erreur d\'impression';
+      this.notifyListeners('error');
+    });
+  }
+
+  // Check actual connection status from ThermalPrinterModule
+  async checkConnectionStatus(): Promise<boolean> {
+    if (this.ThermalPrinterModule) {
+      try {
+        const status = await this.ThermalPrinterModule.getConnectionStatus();
+        this.connection.isConnected = status.isConnected;
+        if (status.transport) {
+          this.connection.type = status.transport as PrinterType;
+        }
+        return status.isConnected;
+      } catch (error) {
+        console.error('Error checking connection status:', error);
+      }
+    }
+    return this.connection.isConnected;
+  }
+
+  // ============================================================================
+  // BLUETOOTH EVENT LISTENERS (legacy react-native-bluetooth-escpos-printer)
   // ============================================================================
 
   private setupBluetoothEventListeners(): void {
@@ -346,6 +411,29 @@ class UnifiedPrinterServiceClass {
     const hasPermission = await this.requestBluetoothPermissions();
     if (!hasPermission) return [];
 
+    // Use ThermalPrinterModule (our native Kotlin module) FIRST
+    if (this.ThermalPrinterModule) {
+      try {
+        const paired = await this.ThermalPrinterModule.getPairedBluetoothDevices();
+        const devices: PrinterDevice[] = paired.map((d: any) => ({
+          id: `bt_${d.address}`,
+          name: d.name || 'Appareil inconnu',
+          address: d.address,
+          type: 'bluetooth' as PrinterType,
+          paired: true,
+          connected: d.address === this.connection.device?.address && this.connection.isConnected,
+        }));
+
+        // Cache for later
+        await this.savePrinters(devices, 'bluetooth');
+        return devices;
+      } catch (error) {
+        console.error('ThermalPrinterModule scan error:', error);
+        return await this.getSavedPrinters('bluetooth');
+      }
+    }
+
+    // Fallback to legacy BluetoothManager
     if (!this.BluetoothManager) {
       // Simulation mode - return cached + dummy devices
       const cached = await this.getSavedPrinters('bluetooth');
@@ -409,6 +497,27 @@ class UnifiedPrinterServiceClass {
   }
 
   async discoverUSBDevices(): Promise<PrinterDevice[]> {
+    // Use ThermalPrinterModule (our native Kotlin module) for USB
+    if (this.ThermalPrinterModule) {
+      try {
+        const usbDevices = await this.ThermalPrinterModule.getUsbDevices();
+        const devices: PrinterDevice[] = usbDevices.map((d: any) => ({
+          id: `usb_${d.deviceId}`,
+          name: d.productName || d.manufacturerName || 'Imprimante USB',
+          address: d.deviceId,
+          type: 'usb' as PrinterType,
+          manufacturer: d.manufacturerName,
+          model: d.productName,
+        }));
+
+        await this.savePrinters(devices, 'usb');
+        return devices;
+      } catch (error) {
+        console.error('ThermalPrinterModule USB error:', error);
+        return await this.getSavedPrinters('usb');
+      }
+    }
+
     if (!this.UsbSerial) {
       const cached = await this.getSavedPrinters('usb');
       if (cached.length === 0) {
@@ -506,6 +615,23 @@ class UnifiedPrinterServiceClass {
   }
 
   private async connectBluetooth(device: PrinterDevice): Promise<boolean> {
+    // Use ThermalPrinterModule (our native Kotlin module) FIRST
+    if (this.ThermalPrinterModule) {
+      try {
+        const success = await this.ThermalPrinterModule.connectBluetooth(device.address);
+        if (success) {
+          console.log(`✅ ThermalPrinterModule BT connected: ${device.name}`);
+          return true;
+        }
+        return false;
+      } catch (error: any) {
+        this.connection.lastError = error.message || 'Échec connexion Bluetooth';
+        console.error('ThermalPrinterModule BT connect error:', error);
+        return false;
+      }
+    }
+
+    // Fallback to legacy BluetoothManager
     if (!this.BluetoothManager) {
       // Simulation mode
       console.log(`[SIM] Connecting to Bluetooth: ${device.name}`);
@@ -535,6 +661,22 @@ class UnifiedPrinterServiceClass {
     if (!ip) {
       this.connection.lastError = 'Adresse IP invalide';
       return false;
+    }
+
+    // Use ThermalPrinterModule (our native Kotlin module) FIRST
+    if (this.ThermalPrinterModule) {
+      try {
+        const success = await this.ThermalPrinterModule.connectWifi(ip, port);
+        if (success) {
+          console.log(`✅ ThermalPrinterModule WiFi connected: ${ip}:${port}`);
+          return true;
+        }
+        return false;
+      } catch (error: any) {
+        this.connection.lastError = error.message || 'Échec connexion WiFi';
+        console.error('ThermalPrinterModule WiFi connect error:', error);
+        return false;
+      }
     }
 
     // For simulation or when TcpSocket not available
@@ -589,6 +731,22 @@ class UnifiedPrinterServiceClass {
   }
 
   private async connectUSB(device: PrinterDevice): Promise<boolean> {
+    // Use ThermalPrinterModule (our native Kotlin module) FIRST
+    if (this.ThermalPrinterModule) {
+      try {
+        const success = await this.ThermalPrinterModule.connectUsb(device.address);
+        if (success) {
+          console.log(`✅ ThermalPrinterModule USB connected: ${device.name}`);
+          return true;
+        }
+        return false;
+      } catch (error: any) {
+        this.connection.lastError = error.message || 'Échec connexion USB';
+        console.error('ThermalPrinterModule USB connect error:', error);
+        return false;
+      }
+    }
+
     if (!this.UsbSerial) {
       console.log(`[SIM] Connecting to USB: ${device.name}`);
       return true;
@@ -605,6 +763,15 @@ class UnifiedPrinterServiceClass {
   }
 
   async disconnect(): Promise<void> {
+    // Use ThermalPrinterModule if available
+    if (this.ThermalPrinterModule) {
+      try {
+        await this.ThermalPrinterModule.disconnect();
+      } catch (error) {
+        console.error('ThermalPrinterModule disconnect error:', error);
+      }
+    }
+
     switch (this.connection.type) {
       case 'bluetooth':
         if (this.BluetoothManager) {
@@ -639,6 +806,22 @@ class UnifiedPrinterServiceClass {
   }
 
   async quickConnect(): Promise<boolean> {
+    // First, check if ThermalPrinterModule is already connected
+    if (this.ThermalPrinterModule) {
+      try {
+        const status = await this.ThermalPrinterModule.getConnectionStatus();
+        if (status.isConnected) {
+          // Sync our state with actual native module state
+          this.connection.isConnected = true;
+          this.connection.type = (status.transport as PrinterType) || 'bluetooth';
+          console.log('✅ ThermalPrinterModule already connected:', status.transport);
+          return true;
+        }
+      } catch (error) {
+        console.error('Error checking ThermalPrinterModule status:', error);
+      }
+    }
+
     const lastDevice = await this.getActivePrinter();
     if (!lastDevice) return false;
     return this.connect(lastDevice);
@@ -693,6 +876,22 @@ class UnifiedPrinterServiceClass {
   // ============================================================================
 
   async print(data: string): Promise<boolean> {
+    // First, sync with ThermalPrinterModule's actual connection status
+    if (this.ThermalPrinterModule) {
+      try {
+        const status = await this.ThermalPrinterModule.getConnectionStatus();
+        if (status.isConnected) {
+          // Sync our state
+          this.connection.isConnected = true;
+          this.connection.type = (status.transport as PrinterType) || 'bluetooth';
+        } else {
+          this.connection.isConnected = false;
+        }
+      } catch (error) {
+        console.error('Error checking connection status:', error);
+      }
+    }
+
     if (!this.connection.isConnected) {
       const connected = await this.quickConnect();
       if (!connected) {
@@ -728,6 +927,19 @@ class UnifiedPrinterServiceClass {
   }
 
   private async printBluetooth(data: string): Promise<boolean> {
+    // Use ThermalPrinterModule (our native Kotlin module) FIRST
+    if (this.ThermalPrinterModule) {
+      try {
+        const bytesWritten = await this.ThermalPrinterModule.printText(data);
+        console.log(`✅ ThermalPrinterModule BT printed ${bytesWritten} bytes`);
+        return bytesWritten > 0;
+      } catch (error) {
+        console.error('ThermalPrinterModule BT print error:', error);
+        return false;
+      }
+    }
+
+    // Fallback to legacy BluetoothEscposPrinter
     if (!this.BluetoothEscposPrinter) {
       console.log('[SIM] Bluetooth print:', data.substring(0, 100));
       return true;
@@ -750,6 +962,18 @@ class UnifiedPrinterServiceClass {
   }
 
   private async printWiFi(data: string): Promise<boolean> {
+    // Use ThermalPrinterModule (our native Kotlin module) FIRST
+    if (this.ThermalPrinterModule) {
+      try {
+        const bytesWritten = await this.ThermalPrinterModule.printText(data);
+        console.log(`✅ ThermalPrinterModule WiFi printed ${bytesWritten} bytes`);
+        return bytesWritten > 0;
+      } catch (error) {
+        console.error('ThermalPrinterModule WiFi print error:', error);
+        return false;
+      }
+    }
+
     if (!this.wifiSocket) {
       if (!this.TcpSocket) {
         console.log('[SIM] WiFi print:', data.substring(0, 100));
@@ -776,6 +1000,18 @@ class UnifiedPrinterServiceClass {
   }
 
   private async printUSB(data: string): Promise<boolean> {
+    // Use ThermalPrinterModule (our native Kotlin module) FIRST
+    if (this.ThermalPrinterModule) {
+      try {
+        const bytesWritten = await this.ThermalPrinterModule.printText(data);
+        console.log(`✅ ThermalPrinterModule USB printed ${bytesWritten} bytes`);
+        return bytesWritten > 0;
+      } catch (error) {
+        console.error('ThermalPrinterModule USB print error:', error);
+        return false;
+      }
+    }
+
     if (!this.UsbSerial) {
       console.log('[SIM] USB print:', data.substring(0, 100));
       return true;
@@ -808,6 +1044,16 @@ class UnifiedPrinterServiceClass {
   }
 
   async openCashDrawer(): Promise<boolean> {
+    // Use ThermalPrinterModule if available
+    if (this.ThermalPrinterModule) {
+      try {
+        await this.ThermalPrinterModule.openCashDrawer();
+        return true;
+      } catch (error) {
+        console.error('ThermalPrinterModule openCashDrawer error:', error);
+        return false;
+      }
+    }
     return this.print(ESC_POS.OPEN_DRAWER_PIN2);
   }
 
@@ -819,6 +1065,30 @@ class UnifiedPrinterServiceClass {
     const startTime = Date.now();
     const printerType = this.connection.type;
     const deviceName = this.connection.device?.name || 'Inconnu';
+
+    // Use ThermalPrinterModule test page if available (better formatting)
+    if (this.ThermalPrinterModule && this.connection.isConnected) {
+      try {
+        const bytesWritten = await this.ThermalPrinterModule.printTestPage();
+        const duration = Date.now() - startTime;
+        return {
+          success: bytesWritten > 0,
+          message: bytesWritten > 0 ? 'Test imprimé avec succès' : 'Échec impression test',
+          duration,
+          bytesWritten,
+          printerType,
+        };
+      } catch (error: any) {
+        const duration = Date.now() - startTime;
+        return {
+          success: false,
+          message: error.message || 'Erreur test impression',
+          duration,
+          bytesWritten: 0,
+          printerType,
+        };
+      }
+    }
 
     const testData =
       ESC_POS.INIT +

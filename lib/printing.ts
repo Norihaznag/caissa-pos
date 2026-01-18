@@ -22,22 +22,36 @@ export interface PrinterConfig {
 
 // Receipt design configuration
 export interface ReceiptDesign {
+  // Shop Identity
   showLogo: boolean;
   restaurantName: string;
   address: string;
   city: string;
   phone: string;
-  taxId: string;
+  taxId: string;  // ICE / IF / RC
+  
+  // Footer
   footerMessage: string;
   footerMessageArabic: string;
+  
+  // Toggle options - what to show/hide
   showTaxId: boolean;
   showOrderNumber: boolean;
   showTableNumber: boolean;
   showWaiterName: boolean;
   showDateTime: boolean;
   showPaymentDetails: boolean;
+  showSubtotal: boolean;
+  showTotal: boolean;
+  showFooter: boolean;
+  
+  // Formatting options
   fontSize: 'small' | 'normal' | 'large';
   paperWidth: 58 | 80;
+  boldTotal: boolean;
+  separatorStyle: 'dash' | 'equal' | 'dot';
+  centerHeader: boolean;
+  autoCut: boolean;
 }
 
 // Default receipt design
@@ -45,19 +59,26 @@ const defaultReceiptDesign: ReceiptDesign = {
   showLogo: false,
   restaurantName: 'CaissaPro',
   address: '',
-  city: 'Maroc',
+  city: '',
   phone: '',
   taxId: '',
   footerMessage: 'Merci de votre visite!',
-  footerMessageArabic: 'شكرا لزيارتكم',
+  footerMessageArabic: '',
   showTaxId: false,
   showOrderNumber: true,
   showTableNumber: true,
   showWaiterName: true,
   showDateTime: true,
   showPaymentDetails: true,
+  showSubtotal: true,
+  showTotal: true,
+  showFooter: true,
   fontSize: 'normal',
   paperWidth: 80,
+  boldTotal: true,
+  separatorStyle: 'dash',
+  centerHeader: true,
+  autoCut: true,
 };
 
 // Default printer config
@@ -489,7 +510,7 @@ export const generateKitchenTicketCommands = (data: {
   return cmd;
 };
 
-// Print via network/WiFi (ESC/POS over TCP) - Now uses UnifiedPrinterService
+// Print via network/WiFi (ESC/POS over TCP) - Uses ThermalPrinterModule or UnifiedPrinterService
 export const printToNetworkPrinter = async (
   address: string, 
   data: string
@@ -497,7 +518,42 @@ export const printToNetworkPrinter = async (
   try {
     console.log('Printing to network/WiFi printer:', address);
     
-    // Check if already connected to a WiFi printer
+    // Get native ThermalPrinterModule directly (most reliable)
+    const { ThermalPrinterModule } = NativeModules;
+    
+    if (ThermalPrinterModule) {
+      try {
+        // Parse IP and port
+        const [ip, portStr] = address.split(':');
+        const port = parseInt(portStr) || 9100;
+        
+        // Check if ThermalPrinterModule is connected
+        const tpmStatus = await ThermalPrinterModule.getConnectionStatus();
+        console.log('ThermalPrinterModule status:', tpmStatus);
+        
+        if (tpmStatus.isConnected && tpmStatus.transport === 'wifi') {
+          // Already connected - print directly
+          await ThermalPrinterModule.printText(data);
+          console.log('✅ Printed via ThermalPrinterModule WiFi (already connected)');
+          return true;
+        }
+        
+        // Not connected - try to connect
+        console.log('Connecting to WiFi:', ip, port);
+        const connected = await ThermalPrinterModule.connectWifi(ip, port);
+        
+        if (connected) {
+          await ThermalPrinterModule.printText(data);
+          console.log('✅ Printed via ThermalPrinterModule WiFi (new connection)');
+          return true;
+        }
+      } catch (tpmError: any) {
+        console.error('ThermalPrinterModule WiFi print error:', tpmError);
+        // Don't return - fall through to UnifiedPrinterService
+      }
+    }
+    
+    // Fallback: Check if already connected to a WiFi printer via UnifiedPrinterService
     const status = UnifiedPrinterService.getConnectionStatus();
     
     if (status.isConnected && status.type === 'wifi') {
@@ -533,7 +589,7 @@ export const printToNetworkPrinter = async (
   }
 };
 
-// Print via Bluetooth - Uses UnifiedPrinterService for unified printing
+// Print via Bluetooth - Uses ThermalPrinterModule (native Kotlin) or UnifiedPrinterService
 export const printToBluetoothPrinter = async (
   macAddress: string,
   data: string
@@ -541,14 +597,45 @@ export const printToBluetoothPrinter = async (
   try {
     console.log('Printing to Bluetooth printer:', macAddress);
     
-    // Check if already connected via UnifiedPrinterService
+    // Get native ThermalPrinterModule directly (most reliable)
+    const { ThermalPrinterModule } = NativeModules;
+    
+    if (ThermalPrinterModule) {
+      try {
+        // Check if ThermalPrinterModule is connected
+        const tpmStatus = await ThermalPrinterModule.getConnectionStatus();
+        console.log('ThermalPrinterModule status:', tpmStatus);
+        
+        if (tpmStatus.isConnected) {
+          // Already connected - print directly
+          await ThermalPrinterModule.printText(data);
+          console.log('✅ Printed via ThermalPrinterModule (already connected)');
+          return true;
+        }
+        
+        // Not connected - try to connect
+        console.log('Connecting to Bluetooth:', macAddress);
+        const connected = await ThermalPrinterModule.connectBluetooth(macAddress);
+        
+        if (connected) {
+          await ThermalPrinterModule.printText(data);
+          console.log('✅ Printed via ThermalPrinterModule (new connection)');
+          return true;
+        }
+      } catch (tpmError: any) {
+        console.error('ThermalPrinterModule print error:', tpmError);
+        // Don't return - fall through to other methods
+      }
+    }
+    
+    // Fallback: Check if already connected via UnifiedPrinterService
     const status = UnifiedPrinterService.getConnectionStatus();
     
     if (status.isConnected && status.type === 'bluetooth') {
       return await UnifiedPrinterService.printWithRetry(data, 2);
     }
     
-    // Try to quick connect
+    // Try to quick connect via UnifiedPrinterService
     const lastDevice = await UnifiedPrinterService.getActivePrinter();
     
     if (lastDevice && lastDevice.address === macAddress && lastDevice.type === 'bluetooth') {
@@ -558,7 +645,7 @@ export const printToBluetoothPrinter = async (
       }
     }
     
-    // Try legacy BluetoothPrinterService as fallback
+    // Last resort: Try legacy BluetoothPrinterService
     const legacyConnected = BluetoothPrinterService.isConnected();
     
     if (!legacyConnected) {
@@ -596,7 +683,7 @@ export const printToBluetoothPrinter = async (
       }
     }
     
-    // Print with retry
+    // Print with retry via BluetoothPrinterService
     const success = await BluetoothPrinterService.printWithRetry(data, 2);
     return success;
     
@@ -607,7 +694,7 @@ export const printToBluetoothPrinter = async (
   }
 };
 
-// Print via USB - Uses UnifiedPrinterService
+// Print via USB - Uses ThermalPrinterModule or UnifiedPrinterService
 export const printToUSBPrinter = async (
   devicePath: string,
   data: string
@@ -615,6 +702,38 @@ export const printToUSBPrinter = async (
   try {
     console.log('Printing to USB printer:', devicePath);
     
+    // Get native ThermalPrinterModule directly (most reliable)
+    const { ThermalPrinterModule } = NativeModules;
+    
+    if (ThermalPrinterModule) {
+      try {
+        // Check if ThermalPrinterModule is connected via USB
+        const tpmStatus = await ThermalPrinterModule.getConnectionStatus();
+        console.log('ThermalPrinterModule status:', tpmStatus);
+        
+        if (tpmStatus.isConnected && tpmStatus.transport === 'usb') {
+          // Already connected - print directly
+          await ThermalPrinterModule.printText(data);
+          console.log('✅ Printed via ThermalPrinterModule USB (already connected)');
+          return true;
+        }
+        
+        // Not connected - try to connect
+        console.log('Connecting to USB:', devicePath);
+        const connected = await ThermalPrinterModule.connectUsb(devicePath);
+        
+        if (connected) {
+          await ThermalPrinterModule.printText(data);
+          console.log('✅ Printed via ThermalPrinterModule USB (new connection)');
+          return true;
+        }
+      } catch (tpmError: any) {
+        console.error('ThermalPrinterModule USB print error:', tpmError);
+        // Don't return - fall through to UnifiedPrinterService
+      }
+    }
+    
+    // Fallback: Check via UnifiedPrinterService
     const status = UnifiedPrinterService.getConnectionStatus();
     
     if (status.isConnected && status.type === 'usb') {

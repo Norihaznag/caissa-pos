@@ -68,6 +68,7 @@ import {
   BluetoothPrinterService,
   UnifiedPrinterService,
 } from '../lib/printing';
+import { PrinterService, type PrinterState, type PrinterDevice } from '../lib/services/PrinterService';
 import UnifiedPrinterModal from './UnifiedPrinterModal';
 
 interface AdminPanelProps {
@@ -149,36 +150,56 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
   const [restaurantName, setRestaurantName] = useState('');
   const [restaurantAddress, setRestaurantAddress] = useState('');
   const [restaurantPhone, setRestaurantPhone] = useState('');
-  const [printerType, setPrinterType] = useState<'bluetooth' | 'wifi' | 'usb' | 'none'>('none');
-  const [printerAddress, setPrinterAddress] = useState('');
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   
-  // Bluetooth Discovery
+  // Printer State (using new PrinterService)
+  const [printerState, setPrinterState] = useState<PrinterState>({
+    status: 'disconnected',
+    device: null,
+    error: null,
+    isInitialized: false,
+  });
+  const [availablePrinters, setAvailablePrinters] = useState<PrinterDevice[]>([]);
+  const [scanningPrinters, setScanningPrinters] = useState(false);
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
+  
+  // Legacy state (for backward compatibility)
+  const [printerType, setPrinterType] = useState<'bluetooth' | 'wifi' | 'usb' | 'none'>('none');
+  const [printerAddress, setPrinterAddress] = useState('');
+  const [printerConnected, setPrinterConnected] = useState(false);
+  const [connectedPrinterName, setConnectedPrinterName] = useState<string | null>(null);
+  
+  // Bluetooth Discovery (legacy)
   const [showBluetoothModal, setShowBluetoothModal] = useState(false);
   const [bluetoothDevices, setBluetoothDevices] = useState<BluetoothDevice[]>([]);
   const [scanningBluetooth, setScanningBluetooth] = useState(false);
-  const [printerConnected, setPrinterConnected] = useState(false);
-  const [connectedPrinterName, setConnectedPrinterName] = useState<string | null>(null);
   
   // Receipt Design
   const [showReceiptDesignModal, setShowReceiptDesignModal] = useState(false);
   const [receiptDesign, setReceiptDesign] = useState<ReceiptDesign>({
-    showLogo: true,
+    showLogo: false,
     restaurantName: 'CaissaPro',
     address: '',
     city: '',
     phone: '',
     taxId: '',
     footerMessage: 'Merci de votre visite!',
-    footerMessageArabic: 'شكرا لزيارتكم',
-    showTaxId: true,
+    footerMessageArabic: '',
+    showTaxId: false,
     showOrderNumber: true,
     showTableNumber: true,
-    showWaiterName: false,
+    showWaiterName: true,
     showDateTime: true,
     showPaymentDetails: true,
+    showSubtotal: true,
+    showTotal: true,
+    showFooter: true,
     fontSize: 'normal',
     paperWidth: 80,
+    boldTotal: true,
+    separatorStyle: 'dash',
+    centerHeader: true,
+    autoCut: true,
   });
 
   // Load data when tab changes
@@ -242,8 +263,6 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
     setRestaurantName(allSettings['restaurant_name'] || '');
     setRestaurantAddress(allSettings['restaurant_address'] || '');
     setRestaurantPhone(allSettings['restaurant_phone'] || '');
-    setPrinterType((allSettings['printer_type'] as any) || 'none');
-    setPrinterAddress(allSettings['printer_address'] || '');
     setAutoPrintReceipt(allSettings['auto_print_receipt'] === 'true');
     
     // Load receipt design
@@ -252,13 +271,77 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
       setReceiptDesign(savedDesign);
     }
     
-    // Check printer connection status
-    const status = BluetoothPrinterService.getConnectionStatus();
-    setPrinterConnected(status.isConnected);
-    setConnectedPrinterName(status.device?.name || null);
+    // Initialize PrinterService and get state
+    await PrinterService.initialize();
+    const state = PrinterService.getState();
+    setPrinterState(state);
+    setPrinterConnected(state.status === 'connected');
+    setConnectedPrinterName(state.device?.name || null);
+    
+    // Get config for UI
+    const config = PrinterService.getConfig();
+    setPrinterType(config.type);
+    setPrinterAddress(config.deviceAddress);
   };
 
-  // Bluetooth scanning
+  // Subscribe to printer state changes
+  useEffect(() => {
+    const unsubscribe = PrinterService.subscribe((state) => {
+      setPrinterState(state);
+      setPrinterConnected(state.status === 'connected');
+      setConnectedPrinterName(state.device?.name || null);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Scan for printers
+  const scanForPrinters = async () => {
+    setScanningPrinters(true);
+    try {
+      const hasPermission = await requestBluetoothPermissions();
+      if (!hasPermission) {
+        Alert.alert('Permission requise', 'Autorisez le Bluetooth pour scanner les imprimantes.');
+        return;
+      }
+      
+      const devices = await PrinterService.getBluetoothDevices();
+      setAvailablePrinters(devices);
+    } catch (error) {
+      console.error('Scan error:', error);
+      Alert.alert('Erreur', 'Impossible de scanner les imprimantes.');
+    } finally {
+      setScanningPrinters(false);
+    }
+  };
+
+  // Connect to printer
+  const connectToPrinter = async (device: PrinterDevice) => {
+    const success = await PrinterService.connect(device);
+    if (success) {
+      setShowPrinterModal(false);
+      Alert.alert('✅ Connecté', `Imprimante ${device.name} connectée.`);
+      
+      // Save config
+      await PrinterService.saveConfig({
+        type: device.type,
+        deviceName: device.name,
+        deviceAddress: device.address,
+        autoPrint: autoPrintReceipt,
+      });
+    } else {
+      Alert.alert('Échec', 'Impossible de se connecter à l\'imprimante.');
+    }
+  };
+
+  // Test print
+  const handleTestPrint = async () => {
+    const success = await PrinterService.printTestPage();
+    if (success) {
+      Alert.alert('✅ Succès', 'Page de test imprimée!');
+    }
+  };
+
+  // Bluetooth scanning (legacy)
   const scanForBluetoothDevices = async () => {
     setScanningBluetooth(true);
     try {
@@ -607,9 +690,13 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
       await offlineSettingsService.set('restaurant_name', restaurantName);
       await offlineSettingsService.set('restaurant_address', restaurantAddress);
       await offlineSettingsService.set('restaurant_phone', restaurantPhone);
-      await offlineSettingsService.set('printer_type', printerType);
-      await offlineSettingsService.set('printer_address', printerAddress);
       await offlineSettingsService.set('auto_print_receipt', autoPrintReceipt ? 'true' : 'false');
+      
+      // Save printer config via PrinterService
+      await PrinterService.saveConfig({
+        autoPrint: autoPrintReceipt,
+      });
+      
       Alert.alert('✅ Sauvegardé', 'Paramètres enregistrés');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -1310,133 +1397,149 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           )}
         </View>
 
-        {/* Printer Settings */}
+        {/* Printer Settings - Clean Unified Design */}
         <View style={{ backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.xl, marginBottom: spacing.lg, ...shadows.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg, gap: spacing.sm }}>
             <Printer size={20} color={colors.primary} />
             <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>Imprimante de reçus</Text>
           </View>
           
-          {/* Bluetooth Connection Status Banner */}
-          {printerType === 'bluetooth' && (
-            <TouchableOpacity
-              onPress={() => setShowBluetoothModal(true)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                padding: spacing.md,
-                backgroundColor: printerConnected ? '#D1FAE5' : '#FEF3C7',
-                borderRadius: borderRadius.lg,
-                gap: spacing.md,
-                marginBottom: spacing.lg,
-              }}
-            >
-              <View style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: printerConnected ? colors.success : colors.warning,
-                alignItems: 'center',
-                justifyContent: 'center',
+          {/* Connection Status Banner */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: spacing.md,
+            backgroundColor: printerState.status === 'connected' ? '#D1FAE5' : 
+                           printerState.status === 'connecting' ? '#FEF3C7' :
+                           printerState.status === 'error' ? '#FEE2E2' : '#F3F4F6',
+            borderRadius: borderRadius.lg,
+            gap: spacing.md,
+            marginBottom: spacing.lg,
+          }}>
+            <View style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: printerState.status === 'connected' ? colors.success : 
+                             printerState.status === 'connecting' ? colors.warning :
+                             printerState.status === 'error' ? colors.danger : colors.textMuted,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              {printerState.status === 'connected' ? (
+                <BluetoothConnected size={20} color={colors.white} />
+              ) : printerState.status === 'connecting' ? (
+                <Bluetooth size={20} color={colors.white} />
+              ) : (
+                <Printer size={20} color={colors.white} />
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ 
+                fontSize: fontSize.sm, 
+                fontWeight: '600', 
+                color: printerState.status === 'connected' ? '#065F46' : 
+                       printerState.status === 'connecting' ? '#92400E' :
+                       printerState.status === 'error' ? '#991B1B' : '#6B7280'
               }}>
-                {printerConnected ? (
-                  <BluetoothConnected size={20} color={colors.white} />
-                ) : (
-                  <Bluetooth size={20} color={colors.white} />
-                )}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ 
-                  fontSize: fontSize.sm, 
-                  fontWeight: '600', 
-                  color: printerConnected ? '#065F46' : '#92400E' 
-                }}>
-                  {printerConnected ? '✓ Imprimante connectée' : '⚡ Connexion rapide'}
-                </Text>
-                <Text style={{ 
-                  fontSize: fontSize.xs, 
-                  color: printerConnected ? '#047857' : '#B45309',
-                  marginTop: 2,
-                }}>
-                  {printerConnected 
-                    ? connectedPrinterName || 'Connectée' 
-                    : 'Appuyez pour connecter'}
-                </Text>
-              </View>
-              <View style={{
-                backgroundColor: printerConnected ? colors.success : colors.primary,
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.sm,
-                borderRadius: borderRadius.md,
+                {printerState.status === 'connected' ? '✅ Imprimante connectée' : 
+                 printerState.status === 'connecting' ? '🔄 Connexion en cours...' :
+                 printerState.status === 'error' ? '❌ Erreur de connexion' : 
+                 '⚠️ Aucune imprimante'}
+              </Text>
+              <Text style={{ 
+                fontSize: fontSize.xs, 
+                color: printerState.status === 'connected' ? '#047857' : '#6B7280',
+                marginTop: 2,
               }}>
-                <Text style={{ color: colors.white, fontSize: fontSize.xs, fontWeight: '600' }}>
-                  {printerConnected ? 'Gérer' : 'Connecter'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
-          
-          {/* Printer Type Selection */}
-          <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.sm }}>Type de connexion</Text>
-          <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
-            {[
-              { value: 'none', label: 'Aucune', icon: X, color: colors.textMuted },
-              { value: 'bluetooth', label: 'Bluetooth', icon: Bluetooth, color: '#3B82F6' },
-              { value: 'wifi', label: 'WiFi', icon: Wifi, color: colors.success },
-              { value: 'usb', label: 'USB', icon: Usb, color: colors.warning },
-            ].map((type) => (
+                {printerState.device?.name || 'Scannez pour trouver une imprimante'}
+              </Text>
+            </View>
+            {printerState.status === 'connected' && (
               <TouchableOpacity
-                key={type.value}
-                onPress={() => setPrinterType(type.value as any)}
+                onPress={() => PrinterService.disconnect()}
                 style={{
-                  flex: 1,
-                  paddingVertical: spacing.md,
-                  paddingHorizontal: spacing.sm,
-                  borderRadius: borderRadius.lg,
-                  backgroundColor: printerType === type.value ? colors.primaryLight : colors.background,
-                  alignItems: 'center',
-                  borderWidth: 2,
-                  borderColor: printerType === type.value ? colors.primary : 'transparent',
+                  backgroundColor: colors.danger,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: spacing.sm,
+                  borderRadius: borderRadius.md,
                 }}
               >
-                <type.icon size={20} color={printerType === type.value ? colors.primary : type.color} />
-                <Text style={{ 
-                  fontSize: fontSize.xs, 
-                  color: printerType === type.value ? colors.primary : colors.textSecondary,
-                  marginTop: 4,
-                  fontWeight: printerType === type.value ? '600' : '400',
-                }}>
-                  {type.label}
+                <Text style={{ color: colors.white, fontSize: fontSize.xs, fontWeight: '600' }}>
+                  Déconnecter
                 </Text>
               </TouchableOpacity>
-            ))}
+            )}
           </View>
-          
-          {/* Printer Address (only show for wifi) */}
-          {printerType === 'wifi' && (
-            <>
+
+          {/* Scan for Printers Button */}
+          <TouchableOpacity
+            onPress={scanForPrinters}
+            disabled={scanningPrinters}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: spacing.md,
+              backgroundColor: scanningPrinters ? colors.background : colors.primary,
+              borderRadius: borderRadius.lg,
+              gap: spacing.sm,
+              marginBottom: spacing.md,
+            }}
+          >
+            {scanningPrinters ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Bluetooth size={18} color={colors.white} />
+            )}
+            <Text style={{ 
+              fontSize: fontSize.sm, 
+              fontWeight: '600', 
+              color: scanningPrinters ? colors.primary : colors.white 
+            }}>
+              {scanningPrinters ? 'Recherche en cours...' : '🔍 Rechercher imprimantes Bluetooth'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Available Printers List */}
+          {availablePrinters.length > 0 && (
+            <View style={{ marginBottom: spacing.lg }}>
               <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.sm }}>
-                Adresse IP
+                Imprimantes trouvées ({availablePrinters.length})
               </Text>
-              <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
-                <TextInput
+              {availablePrinters.map((device) => (
+                <TouchableOpacity
+                  key={device.address}
+                  onPress={() => connectToPrinter(device)}
                   style={{
-                    flex: 1,
-                    backgroundColor: colors.background,
-                    borderRadius: borderRadius.md,
+                    flexDirection: 'row',
+                    alignItems: 'center',
                     padding: spacing.md,
-                    fontSize: fontSize.md,
-                    color: colors.textPrimary,
-                    borderWidth: 1,
-                    borderColor: colors.borderLight,
+                    backgroundColor: printerState.device?.address === device.address ? colors.successLight : colors.background,
+                    borderRadius: borderRadius.md,
+                    marginBottom: spacing.sm,
+                    gap: spacing.sm,
                   }}
-                  value={printerAddress}
-                  onChangeText={setPrinterAddress}
-                  placeholder="192.168.1.100"
-                  placeholderTextColor={colors.textMuted}
-                />
-              </View>
-            </>
+                >
+                  <Printer size={18} color={printerState.device?.address === device.address ? colors.success : colors.textSecondary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: fontSize.sm, fontWeight: '500', color: colors.textPrimary }}>
+                      {device.name || 'Imprimante inconnue'}
+                    </Text>
+                    <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
+                      {device.address}
+                    </Text>
+                  </View>
+                  {printerState.device?.address === device.address ? (
+                    <Check size={18} color={colors.success} />
+                  ) : (
+                    <Text style={{ fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' }}>
+                      Connecter
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
           
           {/* Auto Print Toggle */}
@@ -1472,6 +1575,31 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
             </View>
           </TouchableOpacity>
           
+          {/* Test Print Button */}
+          <TouchableOpacity
+            onPress={handleTestPrint}
+            disabled={printerState.status !== 'connected'}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: spacing.md,
+              backgroundColor: printerState.status === 'connected' ? '#7C3AED' : colors.background,
+              borderRadius: borderRadius.lg,
+              gap: spacing.sm,
+              marginBottom: spacing.md,
+            }}
+          >
+            <Zap size={18} color={printerState.status === 'connected' ? colors.white : colors.textMuted} />
+            <Text style={{ 
+              fontSize: fontSize.sm, 
+              fontWeight: '600', 
+              color: printerState.status === 'connected' ? colors.white : colors.textMuted 
+            }}>
+              🖨️ Imprimer page de test
+            </Text>
+          </TouchableOpacity>
+
           {/* Receipt Design Button */}
           <TouchableOpacity
             onPress={() => setShowReceiptDesignModal(true)}
@@ -1482,7 +1610,6 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               backgroundColor: colors.primaryLight,
               borderRadius: borderRadius.lg,
               gap: spacing.md,
-              marginBottom: spacing.md,
             }}
           >
             <Printer size={20} color={colors.primary} />
@@ -1495,32 +1622,6 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               </Text>
             </View>
           </TouchableOpacity>
-          
-          {/* Printer Test Button */}
-          <TouchableOpacity
-            onPress={() => {
-              onClose();
-              setTimeout(() => router.push('/printer-test' as any), 300);
-            }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              padding: spacing.md,
-              backgroundColor: '#7C3AED',
-              borderRadius: borderRadius.lg,
-              gap: spacing.md,
-            }}
-          >
-            <Zap size={20} color={colors.white} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: fontSize.sm, color: colors.white, fontWeight: '600' }}>
-                🔧 Test Avancé Imprimante
-              </Text>
-              <Text style={{ fontSize: fontSize.xs, color: 'rgba(255,255,255,0.8)' }}>
-                USB, Bluetooth, WiFi - Test complet
-              </Text>
-            </View>
-          </TouchableOpacity>
         </View>
 
         {/* App Info */}
@@ -1529,11 +1630,17 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
             <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>Version</Text>
-            <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textPrimary }}>1.0.0</Text>
+            <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textPrimary }}>2.1.3</Text>
           </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
             <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>Mode</Text>
             <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.success }}>Hors ligne</Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>Impression</Text>
+            <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: printerState.status === 'connected' ? colors.success : colors.textMuted }}>
+              {printerState.status === 'connected' ? '✅ Prête' : '⚠️ Non configurée'}
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -2051,20 +2158,20 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
         {/* Receipt Design Modal */}
         <Modal visible={showReceiptDesignModal} transparent animationType="fade">
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>
-            <View style={{ backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.xl, width: '100%', maxWidth: 450, maxHeight: '90%' }}>
+            <View style={{ backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.xl, width: '100%', maxWidth: 500, maxHeight: '95%' }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
                 <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
-                  Design du reçu
+                  🧾 Design du Ticket
                 </Text>
                 <TouchableOpacity onPress={() => setShowReceiptDesignModal(false)}>
                   <X size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
               
-              <ScrollView style={{ maxHeight: '80%' }} showsVerticalScrollIndicator={false}>
-                {/* Restaurant Info */}
-                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
-                  INFORMATIONS RESTAURANT
+              <ScrollView style={{ maxHeight: '75%' }} showsVerticalScrollIndicator={false}>
+                {/* ========== SHOP IDENTITY ========== */}
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: colors.primary, marginBottom: spacing.sm, marginTop: spacing.md }}>
+                  🏪 IDENTITÉ DU COMMERCE
                 </Text>
                 
                 <TextInput
@@ -2075,10 +2182,13 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                     fontSize: fontSize.md,
                     color: colors.textPrimary,
                     marginBottom: spacing.sm,
+                    borderWidth: 1,
+                    borderColor: colors.borderLight,
                   }}
                   value={receiptDesign.restaurantName}
                   onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, restaurantName: text }))}
-                  placeholder="Nom du restaurant"
+                  placeholder="Nom du commerce (ex: CaissaPro)"
+                  placeholderTextColor={colors.textMuted}
                 />
                 
                 <TextInput
@@ -2092,7 +2202,8 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                   }}
                   value={receiptDesign.address}
                   onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, address: text }))}
-                  placeholder="Adresse"
+                  placeholder="Adresse (ex: 123 Rue Mohammed V)"
+                  placeholderTextColor={colors.textMuted}
                 />
                 
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
@@ -2108,6 +2219,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                     value={receiptDesign.city}
                     onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, city: text }))}
                     placeholder="Ville"
+                    placeholderTextColor={colors.textMuted}
                   />
                   <TextInput
                     style={{
@@ -2121,6 +2233,8 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                     value={receiptDesign.phone}
                     onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, phone: text }))}
                     placeholder="Téléphone"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="phone-pad"
                   />
                 </View>
                 
@@ -2131,16 +2245,17 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                     padding: spacing.md,
                     fontSize: fontSize.md,
                     color: colors.textPrimary,
-                    marginBottom: spacing.lg,
+                    marginBottom: spacing.md,
                   }}
                   value={receiptDesign.taxId}
                   onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, taxId: text }))}
-                  placeholder="N° ICE / IF"
+                  placeholder="N° ICE / IF / RC (optionnel)"
+                  placeholderTextColor={colors.textMuted}
                 />
                 
-                {/* Footer Messages */}
-                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
-                  MESSAGES DE PIED DE PAGE
+                {/* ========== FOOTER MESSAGE ========== */}
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: colors.primary, marginBottom: spacing.sm, marginTop: spacing.md }}>
+                  💬 MESSAGE DE REMERCIEMENT
                 </Text>
                 
                 <TextInput
@@ -2150,33 +2265,20 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                     padding: spacing.md,
                     fontSize: fontSize.md,
                     color: colors.textPrimary,
-                    marginBottom: spacing.sm,
+                    marginBottom: spacing.md,
                   }}
                   value={receiptDesign.footerMessage}
                   onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, footerMessage: text }))}
-                  placeholder="Message de remerciement"
+                  placeholder="Merci de votre visite!"
+                  placeholderTextColor={colors.textMuted}
                 />
                 
-                <TextInput
-                  style={{
-                    backgroundColor: colors.background,
-                    borderRadius: borderRadius.md,
-                    padding: spacing.md,
-                    fontSize: fontSize.md,
-                    color: colors.textPrimary,
-                    marginBottom: spacing.lg,
-                    textAlign: 'right',
-                  }}
-                  value={receiptDesign.footerMessageArabic}
-                  onChangeText={(text) => setReceiptDesign(prev => ({ ...prev, footerMessageArabic: text }))}
-                  placeholder="شكرا لزيارتكم"
-                />
-                
-                {/* Paper Size */}
-                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
-                  TAILLE DU PAPIER
+                {/* ========== PAPER & FORMATTING ========== */}
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: colors.primary, marginBottom: spacing.sm, marginTop: spacing.md }}>
+                  📄 FORMAT DU PAPIER
                 </Text>
-                <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
+                
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
                   {([58, 80] as const).map((size) => (
                     <TouchableOpacity
                       key={size}
@@ -2187,6 +2289,8 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                         borderRadius: borderRadius.md,
                         backgroundColor: receiptDesign.paperWidth === size ? colors.primary : colors.background,
                         alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: receiptDesign.paperWidth === size ? colors.primary : colors.borderLight,
                       }}
                     >
                       <Text style={{ 
@@ -2194,23 +2298,59 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                         fontWeight: '600', 
                         color: receiptDesign.paperWidth === size ? colors.white : colors.textPrimary 
                       }}>
-                        {size}mm
+                        {size}mm {size === 58 ? '(petit)' : '(standard)'}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
                 
-                {/* Toggle Options */}
-                <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm }}>
-                  OPTIONS D'AFFICHAGE
+                {/* Separator Style */}
+                <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginBottom: spacing.xs }}>
+                  Style de séparateur
+                </Text>
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
+                  {([
+                    { value: 'dash', label: '------' },
+                    { value: 'equal', label: '======' },
+                    { value: 'dot', label: '......' },
+                  ] as const).map(({ value, label }) => (
+                    <TouchableOpacity
+                      key={value}
+                      onPress={() => setReceiptDesign(prev => ({ ...prev, separatorStyle: value }))}
+                      style={{
+                        flex: 1,
+                        paddingVertical: spacing.sm,
+                        borderRadius: borderRadius.md,
+                        backgroundColor: receiptDesign.separatorStyle === value ? colors.primaryLight : colors.background,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ 
+                        fontSize: fontSize.sm, 
+                        fontFamily: 'monospace',
+                        color: receiptDesign.separatorStyle === value ? colors.primary : colors.textSecondary 
+                      }}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                {/* ========== DISPLAY OPTIONS ========== */}
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: colors.primary, marginBottom: spacing.sm, marginTop: spacing.md }}>
+                  👁️ ÉLÉMENTS À AFFICHER
                 </Text>
                 
                 {[
                   { key: 'showOrderNumber', label: 'Numéro de commande' },
                   { key: 'showTableNumber', label: 'Numéro de table' },
+                  { key: 'showWaiterName', label: 'Nom du serveur' },
                   { key: 'showDateTime', label: 'Date et heure' },
+                  { key: 'showSubtotal', label: 'Sous-total' },
+                  { key: 'showTotal', label: 'Total' },
                   { key: 'showPaymentDetails', label: 'Détails du paiement' },
                   { key: 'showTaxId', label: 'N° ICE / IF' },
+                  { key: 'showFooter', label: 'Message de remerciement' },
                 ].map(({ key, label }) => (
                   <TouchableOpacity
                     key={key}
@@ -2218,56 +2358,170 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      padding: spacing.sm,
-                      marginBottom: spacing.xs,
+                      paddingVertical: spacing.sm,
+                      paddingHorizontal: spacing.xs,
                     }}
                   >
                     <View style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 6,
+                      width: 22,
+                      height: 22,
+                      borderRadius: 5,
                       backgroundColor: receiptDesign[key as keyof ReceiptDesign] ? colors.success : colors.border,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginRight: spacing.md,
+                      marginRight: spacing.sm,
                     }}>
-                      {receiptDesign[key as keyof ReceiptDesign] && <Check size={16} color={colors.white} />}
+                      {receiptDesign[key as keyof ReceiptDesign] && <Check size={14} color={colors.white} />}
                     </View>
                     <Text style={{ fontSize: fontSize.sm, color: colors.textPrimary }}>{label}</Text>
                   </TouchableOpacity>
                 ))}
+                
+                {/* ========== FORMATTING OPTIONS ========== */}
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: colors.primary, marginBottom: spacing.sm, marginTop: spacing.lg }}>
+                  ⚙️ OPTIONS DE MISE EN FORME
+                </Text>
+                
+                {[
+                  { key: 'boldTotal', label: 'Total en gras et grand' },
+                  { key: 'centerHeader', label: 'Centrer l\'en-tête' },
+                  { key: 'autoCut', label: 'Couper le papier automatiquement' },
+                ].map(({ key, label }) => (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => setReceiptDesign(prev => ({ ...prev, [key]: !prev[key as keyof ReceiptDesign] }))}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: spacing.sm,
+                      paddingHorizontal: spacing.xs,
+                    }}
+                  >
+                    <View style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 5,
+                      backgroundColor: receiptDesign[key as keyof ReceiptDesign] ? colors.success : colors.border,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: spacing.sm,
+                    }}>
+                      {receiptDesign[key as keyof ReceiptDesign] && <Check size={14} color={colors.white} />}
+                    </View>
+                    <Text style={{ fontSize: fontSize.sm, color: colors.textPrimary }}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+                
               </ScrollView>
               
-              {/* Save Button */}
-              <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
+              {/* Action Buttons */}
+              <View style={{ marginTop: spacing.lg }}>
+                {/* Test Print Button */}
                 <TouchableOpacity
-                  onPress={() => setShowReceiptDesignModal(false)}
+                  onPress={async () => {
+                    try {
+                      // Save first then print test
+                      await saveReceiptDesign(receiptDesign);
+                      const PrinterService = (await import('../lib/services/PrinterService')).default;
+                      await PrinterService.initialize();
+                      const connected = await PrinterService.checkConnection();
+                      if (!connected) {
+                        Alert.alert('Imprimante non connectée', 'Connectez une imprimante d\'abord.');
+                        return;
+                      }
+                      // Print a test receipt with sample data
+                      const testData = {
+                        restaurantName: receiptDesign.restaurantName || 'CaissaPro',
+                        address: receiptDesign.address,
+                        phone: receiptDesign.phone,
+                        orderId: 'TEST-001',
+                        orderNumber: 1,
+                        tableNumber: 5,
+                        waiterName: 'Serveur Test',
+                        date: new Date().toLocaleString('fr-FR'),
+                        items: [
+                          { name: 'Cappuccino', quantity: 2, unitPrice: 15, total: 30 },
+                          { name: 'Croissant', quantity: 1, unitPrice: 12, total: 12 },
+                        ],
+                        subtotal: 42,
+                        discount: 0,
+                        tax: 0,
+                        total: 42,
+                        paymentMethod: 'Espèces',
+                        amountReceived: 50,
+                        change: 8,
+                        footerMessage: receiptDesign.footerMessage,
+                        showOrderNumber: receiptDesign.showOrderNumber,
+                        showTableNumber: receiptDesign.showTableNumber,
+                        showWaiterName: receiptDesign.showWaiterName,
+                        showDateTime: receiptDesign.showDateTime,
+                        showPaymentDetails: receiptDesign.showPaymentDetails,
+                        showSubtotal: receiptDesign.showSubtotal,
+                        showTotal: receiptDesign.showTotal,
+                        showFooter: receiptDesign.showFooter,
+                        paperWidth: receiptDesign.paperWidth,
+                        boldTotal: receiptDesign.boldTotal,
+                        separatorStyle: receiptDesign.separatorStyle,
+                        centerHeader: receiptDesign.centerHeader,
+                        autoCut: receiptDesign.autoCut,
+                      };
+                      const success = await PrinterService.printReceipt(testData);
+                      if (success) {
+                        Alert.alert('✅ Test réussi', 'Le ticket test a été imprimé.');
+                      }
+                    } catch (error) {
+                      console.error('Test print error:', error);
+                      Alert.alert('Erreur', 'Échec de l\'impression test.');
+                    }
+                  }}
                   style={{
-                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: spacing.sm,
                     paddingVertical: spacing.md,
                     borderRadius: borderRadius.md,
-                    backgroundColor: colors.background,
-                    alignItems: 'center',
+                    backgroundColor: colors.successLight,
+                    marginBottom: spacing.sm,
                   }}
                 >
-                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textSecondary }}>
-                    Annuler
+                  <Printer size={18} color={colors.success} />
+                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.success }}>
+                    🖨️ Imprimer un Test
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleSaveReceiptDesign}
-                  style={{
-                    flex: 1,
-                    paddingVertical: spacing.md,
-                    borderRadius: borderRadius.md,
-                    backgroundColor: colors.primary,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.white }}>
-                    Sauvegarder
-                  </Text>
-                </TouchableOpacity>
+                
+                {/* Save / Cancel */}
+                <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                  <TouchableOpacity
+                    onPress={() => setShowReceiptDesignModal(false)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: spacing.md,
+                      borderRadius: borderRadius.md,
+                      backgroundColor: colors.background,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textSecondary }}>
+                      Annuler
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSaveReceiptDesign}
+                    style={{
+                      flex: 1,
+                      paddingVertical: spacing.md,
+                      borderRadius: borderRadius.md,
+                      backgroundColor: colors.primary,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.white }}>
+                      ✓ Sauvegarder
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </View>

@@ -656,59 +656,130 @@ class ThermalPrinterModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    /**
+     * Build ESC/POS receipt commands with proper formatting
+     * Fixed layout order: Header -> Date -> Items -> Totals -> Payment -> Footer
+     * No duplicate lines, clean monospaced alignment
+     */
     private fun buildReceiptCommands(data: ReadableMap): ByteArray {
         val buffer = mutableListOf<Byte>()
         
-        // Initialize printer
+        // Get formatting options
+        val lineWidth = if (data.hasKey("lineWidth")) data.getInt("lineWidth") else 32
+        val showOrderNumber = !data.hasKey("showOrderNumber") || data.getBoolean("showOrderNumber")
+        val showTableNumber = !data.hasKey("showTableNumber") || data.getBoolean("showTableNumber")
+        val showWaiterName = !data.hasKey("showWaiterName") || data.getBoolean("showWaiterName")
+        val showDateTime = !data.hasKey("showDateTime") || data.getBoolean("showDateTime")
+        val showPaymentDetails = !data.hasKey("showPaymentDetails") || data.getBoolean("showPaymentDetails")
+        val showSubtotal = !data.hasKey("showSubtotal") || data.getBoolean("showSubtotal")
+        val showTotal = !data.hasKey("showTotal") || data.getBoolean("showTotal")
+        val showFooter = !data.hasKey("showFooter") || data.getBoolean("showFooter")
+        val boldTotal = !data.hasKey("boldTotal") || data.getBoolean("boldTotal")
+        val centerHeader = !data.hasKey("centerHeader") || data.getBoolean("centerHeader")
+        val autoCut = !data.hasKey("autoCut") || data.getBoolean("autoCut")
+        val separatorStyle = if (data.hasKey("separatorStyle")) data.getString("separatorStyle") else "dash"
+        
+        // Build separator based on style
+        val sepChar = when (separatorStyle) {
+            "equal" -> '='
+            "dot" -> '.'
+            else -> '-'
+        }
+        val separator = sepChar.toString().repeat(lineWidth)
+        
+        // ========== INITIALIZE PRINTER ==========
         buffer.addAll(byteArrayOf(ESC, '@'.code.toByte()).toList())
         
-        // Set charset for UTF-8 (code page 65001 or similar)
-        // ESC t n - Select character code table
-        buffer.addAll(byteArrayOf(ESC, 't'.code.toByte(), 0).toList())
+        // Set code page for French characters (Western Europe / Latin-1)
+        buffer.addAll(byteArrayOf(ESC, 't'.code.toByte(), 6).toList())
         
-        // Header - Center align, Double size
-        buffer.addAll(byteArrayOf(ESC, 'a'.code.toByte(), 1).toList())  // Center
-        buffer.addAll(byteArrayOf(GS, '!'.code.toByte(), 0x11).toList())  // Double size
+        // ========== HEADER ==========
+        if (centerHeader) {
+            buffer.addAll(byteArrayOf(ESC, 'a'.code.toByte(), 1).toList())  // Center
+        }
+        buffer.addAll(byteArrayOf(GS, '!'.code.toByte(), 0x11).toList())  // Double width+height
         
-        val header = data.getString("header") ?: "Receipt"
+        val header = data.getString("header") ?: "CaissaPro"
         buffer.addAll(header.toByteArray(Charsets.UTF_8).toList())
         buffer.add(LF)
         
-        // Normal size
+        // Normal size for subheader
         buffer.addAll(byteArrayOf(GS, '!'.code.toByte(), 0).toList())
         
-        // Subheader
-        data.getString("subheader")?.let { subheader ->
+        // Address/subheader
+        data.getString("subheader")?.takeIf { it.isNotBlank() }?.let { subheader ->
             buffer.addAll(subheader.toByteArray(Charsets.UTF_8).toList())
+            buffer.add(LF)
+        }
+        
+        // Phone
+        data.getString("phone")?.takeIf { it.isNotBlank() }?.let { phone ->
+            buffer.addAll("Tel: $phone".toByteArray(Charsets.UTF_8).toList())
             buffer.add(LF)
         }
         
         buffer.add(LF)
         
-        // Left align for items
-        buffer.addAll(byteArrayOf(ESC, 'a'.code.toByte(), 0).toList())
-        
-        // Separator
-        val separator = "--------------------------------"
+        // ========== ORDER INFO ==========
+        buffer.addAll(byteArrayOf(ESC, 'a'.code.toByte(), 0).toList())  // Left align
         buffer.addAll(separator.toByteArray(Charsets.UTF_8).toList())
         buffer.add(LF)
         
-        // Items
+        // Order number
+        if (showOrderNumber) {
+            val orderNumber = data.getString("orderNumber") ?: ""
+            val orderLine = padLine("Commande:", "#$orderNumber", lineWidth)
+            buffer.addAll(orderLine.toByteArray(Charsets.UTF_8).toList())
+            buffer.add(LF)
+        }
+        
+        // Date/Time
+        if (showDateTime) {
+            data.getString("date")?.let { date ->
+                val dateLine = padLine("Date:", date, lineWidth)
+                buffer.addAll(dateLine.toByteArray(Charsets.UTF_8).toList())
+                buffer.add(LF)
+            }
+        }
+        
+        // Table number
+        if (showTableNumber) {
+            val tableNumber = if (data.hasKey("tableNumber")) data.getInt("tableNumber") else 0
+            if (tableNumber > 0) {
+                val tableLine = padLine("Table:", tableNumber.toString(), lineWidth)
+                buffer.addAll(tableLine.toByteArray(Charsets.UTF_8).toList())
+                buffer.add(LF)
+            }
+        }
+        
+        // Waiter name
+        if (showWaiterName) {
+            data.getString("waiterName")?.takeIf { it.isNotBlank() }?.let { waiter ->
+                val waiterLine = padLine("Serveur:", waiter, lineWidth)
+                buffer.addAll(waiterLine.toByteArray(Charsets.UTF_8).toList())
+                buffer.add(LF)
+            }
+        }
+        
+        buffer.addAll(separator.toByteArray(Charsets.UTF_8).toList())
+        buffer.add(LF)
+        
+        // ========== ITEMS ==========
         data.getArray("items")?.let { items ->
             for (i in 0 until items.size()) {
                 items.getMap(i)?.let { item ->
                     val name = item.getString("name") ?: ""
                     val qty = item.getInt("quantity")
-                    val price = item.getDouble("price")
                     val total = item.getDouble("total")
                     
-                    val line = String.format("%-20s %2d x %6.0f", 
-                        name.take(20), qty, price)
-                    buffer.addAll(line.toByteArray(Charsets.UTF_8).toList())
-                    buffer.add(LF)
+                    // Format: Name truncated, then "Qty x Total" right-aligned
+                    // Example: "Cappuccino          1 x 15 DH"
+                    val qtyPrice = String.format("%d x %.0f", qty, total)
+                    val maxNameLen = lineWidth - qtyPrice.length - 4  // Leave space for " DH"
+                    val truncatedName = name.take(maxNameLen)
                     
-                    val totalLine = String.format("%32.0f", total)
-                    buffer.addAll(totalLine.toByteArray(Charsets.UTF_8).toList())
+                    val itemLine = padLine(truncatedName, "$qtyPrice DH", lineWidth)
+                    buffer.addAll(itemLine.toByteArray(Charsets.UTF_8).toList())
                     buffer.add(LF)
                 }
             }
@@ -717,50 +788,107 @@ class ThermalPrinterModule(reactContext: ReactApplicationContext) :
         buffer.addAll(separator.toByteArray(Charsets.UTF_8).toList())
         buffer.add(LF)
         
-        // Totals - Right align
-        buffer.addAll(byteArrayOf(ESC, 'a'.code.toByte(), 2).toList())
-        
-        data.getDouble("subtotal").let { subtotal ->
-            val line = String.format("Sous-total: %.2f DH", subtotal)
-            buffer.addAll(line.toByteArray(Charsets.UTF_8).toList())
+        // ========== TOTALS ==========
+        // Subtotal
+        if (showSubtotal) {
+            val subtotal = if (data.hasKey("subtotal")) data.getDouble("subtotal") else 0.0
+            val subtotalLine = padLine("Sous-total:", String.format("%.2f DH", subtotal), lineWidth)
+            buffer.addAll(subtotalLine.toByteArray(Charsets.UTF_8).toList())
             buffer.add(LF)
         }
         
-        // Bold for total
-        buffer.addAll(byteArrayOf(ESC, 'E'.code.toByte(), 1).toList())
-        buffer.addAll(byteArrayOf(GS, '!'.code.toByte(), 0x01).toList())  // Double height
-        
-        data.getDouble("total").let { total ->
-            val line = String.format("TOTAL: %.2f DH", total)
-            buffer.addAll(line.toByteArray(Charsets.UTF_8).toList())
+        // Discount
+        val discount = if (data.hasKey("discount")) data.getDouble("discount") else 0.0
+        if (discount > 0) {
+            val discountLine = padLine("Remise:", String.format("-%.2f DH", discount), lineWidth)
+            buffer.addAll(discountLine.toByteArray(Charsets.UTF_8).toList())
             buffer.add(LF)
         }
         
-        // Normal
-        buffer.addAll(byteArrayOf(ESC, 'E'.code.toByte(), 0).toList())
-        buffer.addAll(byteArrayOf(GS, '!'.code.toByte(), 0).toList())
+        // TOTAL (bold and larger)
+        if (showTotal) {
+            if (boldTotal) {
+                buffer.addAll(byteArrayOf(ESC, 'E'.code.toByte(), 1).toList())  // Bold ON
+                buffer.addAll(byteArrayOf(GS, '!'.code.toByte(), 0x10).toList())  // Double width
+            }
+            
+            val total = if (data.hasKey("total")) data.getDouble("total") else 0.0
+            val totalLine = padLine("TOTAL:", String.format("%.2f DH", total), lineWidth)
+            buffer.addAll(totalLine.toByteArray(Charsets.UTF_8).toList())
+            buffer.add(LF)
+            
+            if (boldTotal) {
+                buffer.addAll(byteArrayOf(ESC, 'E'.code.toByte(), 0).toList())  // Bold OFF
+                buffer.addAll(byteArrayOf(GS, '!'.code.toByte(), 0).toList())  // Normal size
+            }
+        }
         
-        buffer.add(LF)
+        // ========== PAYMENT DETAILS ==========
+        if (showPaymentDetails) {
+            buffer.addAll(separator.toByteArray(Charsets.UTF_8).toList())
+            buffer.add(LF)
+            
+            // Payment method
+            data.getString("paymentMethod")?.takeIf { it.isNotBlank() }?.let { method ->
+                val paymentLine = padLine("Paiement:", method, lineWidth)
+                buffer.addAll(paymentLine.toByteArray(Charsets.UTF_8).toList())
+                buffer.add(LF)
+            }
+            
+            // Amount received (for cash)
+            val amountReceived = if (data.hasKey("amountReceived")) data.getDouble("amountReceived") else 0.0
+            if (amountReceived > 0) {
+                val receivedLine = padLine("Recu:", String.format("%.2f DH", amountReceived), lineWidth)
+                buffer.addAll(receivedLine.toByteArray(Charsets.UTF_8).toList())
+                buffer.add(LF)
+            }
+            
+            // Change
+            val change = if (data.hasKey("change")) data.getDouble("change") else 0.0
+            if (change > 0) {
+                val changeLine = padLine("Monnaie:", String.format("%.2f DH", change), lineWidth)
+                buffer.addAll(changeLine.toByteArray(Charsets.UTF_8).toList())
+                buffer.add(LF)
+            }
+        }
         
-        // Footer - Center
-        buffer.addAll(byteArrayOf(ESC, 'a'.code.toByte(), 1).toList())
-        
-        val footer = data.getString("footer") ?: "Merci de votre visite!"
-        buffer.addAll(footer.toByteArray(Charsets.UTF_8).toList())
-        buffer.add(LF)
-        buffer.add(LF)
-        
-        // Date
-        data.getString("date")?.let { date ->
-            buffer.addAll(date.toByteArray(Charsets.UTF_8).toList())
+        // ========== FOOTER ==========
+        if (showFooter) {
+            buffer.add(LF)
+            buffer.addAll(byteArrayOf(ESC, 'a'.code.toByte(), 1).toList())  // Center
+            
+            val footer = data.getString("footerMessage") ?: "Merci de votre visite!"
+            buffer.addAll(footer.toByteArray(Charsets.UTF_8).toList())
             buffer.add(LF)
         }
         
-        // Feed and partial cut
+        // ========== FEED AND CUT ==========
         buffer.addAll(byteArrayOf(ESC, 'd'.code.toByte(), 4).toList())  // Feed 4 lines
-        buffer.addAll(byteArrayOf(GS, 'V'.code.toByte(), 1).toList())  // Partial cut
         
+        if (autoCut) {
+            buffer.addAll(byteArrayOf(GS, 'V'.code.toByte(), 1).toList())  // Partial cut
+        }
+        
+        Log.d(TAG, "Receipt built: ${buffer.size} bytes, lineWidth=$lineWidth")
         return buffer.toByteArray()
+    }
+    
+    /**
+     * Pad a line with left text and right text, filling middle with spaces
+     */
+    private fun padLine(left: String, right: String, width: Int): String {
+        val spaces = width - left.length - right.length
+        return if (spaces > 0) {
+            left + " ".repeat(spaces) + right
+        } else {
+            // Line too long, truncate left side
+            val maxLeft = width - right.length - 1
+            if (maxLeft > 0) {
+                left.take(maxLeft) + " " + right
+            } else {
+                right.takeLast(width)
+            }
+        }
     }
 
     @ReactMethod

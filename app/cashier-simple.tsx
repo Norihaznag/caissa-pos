@@ -53,13 +53,15 @@ import {
   offlineProductService, 
   offlineOrderService,
   offlineExpenseService,
+  offlineSettingsService,
   Expense,
   EXPENSE_CATEGORIES,
   OfflineOrder,
   OfflineOrderItem,
   clearInvalidSyncQueueItems,
 } from '../lib/offline-db';
-import { loadPrinterConfig, printReceipt, ReceiptData, printDailyReport, DailyReportData, BluetoothPrinterService, quickPrintReceipt, UnifiedPrinterService } from '../lib/printing';
+import { loadPrinterConfig, printReceipt, ReceiptData, printDailyReport, DailyReportData, BluetoothPrinterService, quickPrintReceipt, UnifiedPrinterService, loadReceiptDesign } from '../lib/printing';
+import { PrinterService, type ReceiptData as PrinterReceiptData } from '../lib/services/PrinterService';
 import { hasPermission, type UserRole } from '../lib/permissions';
 import AdminPanel from '../components/AdminPanel';
 import UnifiedPrinterModal from '../components/UnifiedPrinterModal';
@@ -776,50 +778,116 @@ export default function CashierSimpleScreen() {
   };
 
   // Print receipt
-  const handlePrintReceipt = async (order: OfflineOrder) => {
+  const handlePrintReceipt = async (order: OfflineOrder): Promise<boolean> => {
+    console.log('[PRINT_RECEIPT] Starting for order:', order.id);
     setPrinting(true);
     try {
-      const config = await loadPrinterConfig();
-      if (!config.enabled || config.type === 'none') {
-        Alert.alert('Imprimante non configurée', 'Allez dans Paramètres > Imprimante pour configurer');
-        return;
+      // Initialize PrinterService and check connection
+      console.log('[PRINT_RECEIPT] Initializing PrinterService...');
+      await PrinterService.initialize();
+      const status = await PrinterService.checkConnection();
+      console.log('[PRINT_RECEIPT] Connection status:', status);
+      
+      if (!status) {
+        Alert.alert('Imprimante non configurée', 'Allez dans Paramètres > Imprimante pour scanner et connecter une imprimante.');
+        return false;
       }
       
-      const receiptData: ReceiptData = {
-        restaurantName: 'CaissaPro',
-        address: '',
-        city: 'Maroc',
-        phone: '',
-        taxId: '',
+      // Load saved receipt design settings
+      const design = await loadReceiptDesign();
+      console.log('[PRINT_RECEIPT] Design loaded:', design.restaurantName);
+      
+      // Build order number - use last 4 digits of order ID if no explicit order number
+      const orderNumber = order.id.slice(-4).toUpperCase();
+      
+      const receiptData: PrinterReceiptData = {
+        // Header - use design settings
+        restaurantName: design.restaurantName || 'CaissaPro',
+        address: design.address || '',
+        city: design.city || '',
+        phone: design.phone || '',
+        taxId: design.showTaxId ? design.taxId : '',
+        
+        // Order info
         orderId: order.id,
+        orderNumber: parseInt(orderNumber, 16) || parseInt(order.id.slice(-6), 16) || 0,
         tableNumber: order.tableNumber || 0,
         waiterName: user?.name || 'Caissier',
-        date: order.createdAt.toLocaleString('fr-FR'),
+        date: order.createdAt.toLocaleString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        
+        // Items
         items: order.items.map(item => ({
           name: item.productName,
           quantity: item.quantity,
           unitPrice: item.price,
           total: item.price * item.quantity,
         })),
+        
+        // Totals
         subtotal: order.totalAmount + order.discount,
         discount: order.discount,
         tax: 0,
         total: order.totalAmount,
+        
+        // Payment
         paymentMethod: order.paymentMethod === 'cash' ? 'Espèces' : (order.paymentMethod === 'card' ? 'Carte' : ''),
         amountReceived: order.amountReceived || 0,
         change: order.changeAmount || 0,
+        
+        // Footer
+        footerMessage: design.footerMessage || 'Merci de votre visite!',
+        
+        // Display options from design settings
+        showOrderNumber: design.showOrderNumber,
+        showTableNumber: design.showTableNumber,
+        showWaiterName: design.showWaiterName,
+        showDateTime: design.showDateTime,
+        showPaymentDetails: design.showPaymentDetails,
+        showSubtotal: design.showSubtotal !== false,
+        showTotal: design.showTotal !== false,
+        showFooter: design.showFooter !== false,
+        
+        // Formatting options from design settings
+        paperWidth: design.paperWidth,
+        boldTotal: design.boldTotal !== false,
+        separatorStyle: design.separatorStyle || 'dash',
+        centerHeader: design.centerHeader !== false,
+        autoCut: design.autoCut !== false,
       };
       
-      await printReceipt(config, receiptData);
-      await offlineOrderService.markPrinted(order.id);
+      console.log('[PRINT_RECEIPT] Receipt data prepared:', {
+        restaurantName: receiptData.restaurantName,
+        orderId: receiptData.orderId,
+        itemsCount: receiptData.items.length,
+        total: receiptData.total,
+        tableNumber: receiptData.tableNumber,
+      });
       
-      try {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {}
+      console.log('[PRINT_RECEIPT] Calling PrinterService.printReceipt()...');
+      const success = await PrinterService.printReceipt(receiptData);
+      console.log('[PRINT_RECEIPT] Print result:', success ? 'SUCCESS' : 'FAILED');
+      
+      if (success) {
+        await offlineOrderService.markPrinted(order.id);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch {}
+        return true;
+      } else {
+        Alert.alert('Erreur d\'impression', 'Échec de l\'impression. Vérifiez la connexion.');
+        return false;
+      }
       
     } catch (error) {
-      console.error('Print error:', error);
+      console.error('[PRINT_RECEIPT] ❌ Error:', error);
       Alert.alert('Erreur d\'impression', 'Vérifiez la connexion de l\'imprimante');
+      return false;
     } finally {
       setPrinting(false);
     }
@@ -902,14 +970,33 @@ export default function CashierSimpleScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {}
       
-      // Auto-print receipt if printer is configured
+      // Auto-print receipt if enabled AND printer is connected
       try {
-        const printerConfig = await loadPrinterConfig();
-        if (printerConfig.enabled && printerConfig.type !== 'none') {
-          await handlePrintReceipt(newOrder);
+        const autoPrintEnabled = await offlineSettingsService.get('auto_print_receipt');
+        console.log('[AUTO_PRINT] Setting auto_print_receipt =', autoPrintEnabled);
+        
+        const printerConnected = await PrinterService.checkConnection();
+        console.log('[AUTO_PRINT] Printer connected =', printerConnected);
+        console.log('[AUTO_PRINT] Order ID =', newOrder.id);
+        console.log('[AUTO_PRINT] Items count =', newOrder.items.length);
+        console.log('[AUTO_PRINT] Total =', newOrder.total);
+        
+        // Check both: user wants auto-print AND printer is connected
+        if (autoPrintEnabled === 'true' && printerConnected) {
+          console.log('[AUTO_PRINT] ✅ Starting auto-print for order:', newOrder.id);
+          const printResult = await handlePrintReceipt(newOrder);
+          console.log('[AUTO_PRINT] Print result =', printResult ? 'SUCCESS' : 'FAILED');
+        } else {
+          console.log('[AUTO_PRINT] ⏭️ Skipped:', { 
+            autoPrintEnabled, 
+            printerConnected,
+            reason: !autoPrintEnabled || autoPrintEnabled !== 'true' 
+              ? 'Auto-print disabled' 
+              : 'Printer not connected'
+          });
         }
       } catch (printError) {
-        console.log('Auto-print skipped:', printError);
+        console.error('[AUTO_PRINT] ❌ Error:', printError);
       }
       
       // Reset

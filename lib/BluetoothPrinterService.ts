@@ -110,6 +110,7 @@ class BluetoothPrinterServiceClass {
   private printQueue: PrintJob[] = [];
   private isProcessingQueue = false;
   private connectionListeners: ((status: ConnectionStatus) => void)[] = [];
+  private ThermalPrinterModule: any = null;  // Our custom native module
   private BluetoothManager: any = null;
   private BluetoothEscposPrinter: any = null;
   private eventEmitter: NativeEventEmitter | null = null;
@@ -126,10 +127,22 @@ class BluetoothPrinterServiceClass {
     if (this.isInitialized) return true;
     
     try {
-      // Try to load the native Bluetooth module
-      const { BluetoothManager: BM, BluetoothEscposPrinter: BEP } = NativeModules;
+      // Try to load the native Bluetooth modules - PRIORITY: ThermalPrinterModule
+      const { ThermalPrinterModule: TPM, BluetoothManager: BM, BluetoothEscposPrinter: BEP } = NativeModules;
       
-      if (BM && BEP) {
+      // Use our custom ThermalPrinterModule FIRST (supports USB, BT, WiFi)
+      if (TPM) {
+        this.ThermalPrinterModule = TPM;
+        this.eventEmitter = new NativeEventEmitter(TPM);
+        this.isInitialized = true;
+        console.log('✅ BluetoothPrinterService using ThermalPrinterModule (native Kotlin)');
+        
+        // Auto-connect to last device
+        this.autoConnectToSavedDevice();
+        
+        return true;
+      } else if (BM && BEP) {
+        // Fallback to legacy react-native-bluetooth-escpos-printer
         this.BluetoothManager = BM;
         this.BluetoothEscposPrinter = BEP;
         this.eventEmitter = new NativeEventEmitter(BM);
@@ -138,7 +151,7 @@ class BluetoothPrinterServiceClass {
         this.setupEventListeners();
         
         this.isInitialized = true;
-        console.log('✅ BluetoothPrinterService initialized with native module');
+        console.log('✅ BluetoothPrinterService initialized with legacy native module');
         
         // Auto-connect to last device
         this.autoConnectToSavedDevice();
@@ -320,6 +333,26 @@ class BluetoothPrinterServiceClass {
       }
     }
 
+    // Use ThermalPrinterModule (our native Kotlin module) FIRST
+    if (this.ThermalPrinterModule) {
+      try {
+        const paired = await this.ThermalPrinterModule.getPairedBluetoothDevices();
+        const devices: BluetoothDevice[] = paired.map((d: any) => ({
+          name: d.name || 'Appareil inconnu',
+          address: d.address,
+          paired: true,
+          connected: d.address === this.connection.device?.address && this.connection.isConnected,
+        }));
+        
+        // Cache devices for quick access
+        await this.cacheDevices(devices);
+        return devices;
+      } catch (error) {
+        console.error('ThermalPrinterModule scan error:', error);
+        return await this.getCachedDevices();
+      }
+    }
+
     if (!this.BluetoothManager) {
       // No native module - return cached devices + show instructions
       const cachedDevices = await this.getCachedDevices();
@@ -387,6 +420,32 @@ class BluetoothPrinterServiceClass {
     this.connection.device = device;
     this.notifyListeners('connecting');
 
+    // Use ThermalPrinterModule (our native Kotlin module) FIRST
+    if (this.ThermalPrinterModule) {
+      try {
+        const success = await this.ThermalPrinterModule.connectBluetooth(device.address);
+        
+        this.connection.isConnecting = false;
+        
+        if (success) {
+          this.connection.isConnected = true;
+          this.connection.lastError = null;
+          this.reconnectAttempts = 0;
+          this.notifyListeners('connected');
+          await this.saveLastConnectedDevice(device);
+          console.log('✅ ThermalPrinterModule connected to:', device.name);
+          return true;
+        } else {
+          this.handleConnectionFailure('Échec de connexion Bluetooth');
+          return false;
+        }
+      } catch (error: any) {
+        this.connection.isConnecting = false;
+        this.handleConnectionFailure(error.message || 'Échec de connexion');
+        return false;
+      }
+    }
+
     if (!this.BluetoothManager) {
       // Simulation mode
       this.connection.isConnecting = false;
@@ -425,6 +484,19 @@ class BluetoothPrinterServiceClass {
   }
 
   async disconnect(): Promise<void> {
+    // Use ThermalPrinterModule if available
+    if (this.ThermalPrinterModule) {
+      try {
+        await this.ThermalPrinterModule.disconnect();
+      } catch (error) {
+        console.error('ThermalPrinterModule disconnect error:', error);
+      }
+      this.connection.isConnected = false;
+      this.connection.device = null;
+      this.notifyListeners('disconnected');
+      return;
+    }
+
     if (!this.BluetoothManager) {
       this.connection.isConnected = false;
       this.connection.device = null;
@@ -516,6 +588,25 @@ class BluetoothPrinterServiceClass {
       }
     }
 
+    // Use ThermalPrinterModule FIRST (our native Kotlin module)
+    if (this.ThermalPrinterModule) {
+      try {
+        await this.ThermalPrinterModule.printText(data);
+        console.log('✅ ThermalPrinterModule print successful');
+        return true;
+      } catch (error: any) {
+        console.error('ThermalPrinterModule print error:', error);
+        
+        // Add to queue for retry if connection lost
+        if (error.message?.includes('not connected') || error.message?.includes('déconnecté')) {
+          this.addToQueue(data);
+          this.attemptReconnect();
+        }
+        
+        return false;
+      }
+    }
+
     if (!this.BluetoothEscposPrinter) {
       // Simulation mode - just log
       console.log('📄 [SIM] Printing:', data.substring(0, 100) + '...');
@@ -572,6 +663,17 @@ class BluetoothPrinterServiceClass {
   }
 
   async printRaw(rawBytes: Uint8Array): Promise<boolean> {
+    // Use ThermalPrinterModule if available
+    if (this.ThermalPrinterModule) {
+      try {
+        await this.ThermalPrinterModule.printRawData(Array.from(rawBytes));
+        return true;
+      } catch (error) {
+        console.error('ThermalPrinterModule printRaw error:', error);
+        return false;
+      }
+    }
+
     if (!this.connection.isConnected || !this.BluetoothEscposPrinter) {
       return false;
     }
@@ -586,10 +688,30 @@ class BluetoothPrinterServiceClass {
   }
 
   async openCashDrawer(): Promise<boolean> {
+    // Use ThermalPrinterModule if available
+    if (this.ThermalPrinterModule) {
+      try {
+        await this.ThermalPrinterModule.openCashDrawer();
+        return true;
+      } catch (error) {
+        console.error('ThermalPrinterModule openCashDrawer error:', error);
+      }
+    }
     return this.print(ESC_POS.OPEN_DRAWER);
   }
 
   async printTestPage(): Promise<boolean> {
+    // Use ThermalPrinterModule if available (has built-in test page)
+    if (this.ThermalPrinterModule) {
+      try {
+        await this.ThermalPrinterModule.printTestPage();
+        return true;
+      } catch (error) {
+        console.error('ThermalPrinterModule printTestPage error:', error);
+        // Fall through to manual test page
+      }
+    }
+
     const testReceipt = 
       ESC_POS.INIT +
       ESC_POS.ALIGN_CENTER +
