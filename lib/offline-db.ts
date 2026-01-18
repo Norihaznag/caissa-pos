@@ -1570,3 +1570,378 @@ export const offlineSettingsService = {
     await database.runAsync('DELETE FROM settings WHERE key = ?', [key]);
   },
 };
+
+// ============================================================================
+// ANALYTICS SERVICE - v2.2 Production Polish
+// ============================================================================
+
+export interface DailyStatsExtended {
+  date: string;
+  totalOrders: number;
+  paidOrders: number;
+  cancelledOrders: number;
+  totalRevenue: number;
+  cashRevenue: number;
+  cardRevenue: number;
+  avgOrderValue: number;
+  totalDiscount: number;
+  peakHour: number | null;
+  peakHourOrders: number;
+}
+
+export interface TopProduct {
+  productId: string;
+  productName: string;
+  totalQuantity: number;
+  totalRevenue: number;
+}
+
+export interface HourlyStats {
+  hour: number;
+  orders: number;
+  revenue: number;
+}
+
+export interface WeeklyTrend {
+  dayOfWeek: number;
+  dayName: string;
+  orders: number;
+  revenue: number;
+}
+
+export const analyticsService = {
+  /**
+   * Get extended daily stats for a specific date
+   */
+  async getDailyStatsForDate(date: Date): Promise<DailyStatsExtended> {
+    const database = await getDatabase();
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const stats = await database.getFirstAsync<{
+      total_orders: number;
+      paid_orders: number;
+      cancelled_orders: number;
+      total_revenue: number;
+      cash_revenue: number;
+      card_revenue: number;
+      total_discount: number;
+    }>(`
+      SELECT 
+        COUNT(*) as total_orders,
+        SUM(CASE WHEN status = 'PAID' THEN 1 ELSE 0 END) as paid_orders,
+        SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelled_orders,
+        COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) as total_revenue,
+        COALESCE(SUM(CASE WHEN status = 'PAID' AND payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as cash_revenue,
+        COALESCE(SUM(CASE WHEN status = 'PAID' AND payment_method = 'card' THEN total_amount ELSE 0 END), 0) as card_revenue,
+        COALESCE(SUM(CASE WHEN status = 'PAID' THEN discount ELSE 0 END), 0) as total_discount
+      FROM orders
+      WHERE created_at >= ? AND created_at <= ?
+    `, [startOfDay.toISOString(), endOfDay.toISOString()]);
+    
+    // Get peak hour
+    const peakHour = await database.getFirstAsync<{
+      hour: number;
+      order_count: number;
+    }>(`
+      SELECT 
+        CAST(strftime('%H', created_at) AS INTEGER) as hour,
+        COUNT(*) as order_count
+      FROM orders
+      WHERE status = 'PAID' AND created_at >= ? AND created_at <= ?
+      GROUP BY hour
+      ORDER BY order_count DESC
+      LIMIT 1
+    `, [startOfDay.toISOString(), endOfDay.toISOString()]);
+    
+    const paidOrders = stats?.paid_orders || 0;
+    const totalRevenue = stats?.total_revenue || 0;
+    
+    return {
+      date: date.toISOString().split('T')[0],
+      totalOrders: stats?.total_orders || 0,
+      paidOrders,
+      cancelledOrders: stats?.cancelled_orders || 0,
+      totalRevenue,
+      cashRevenue: stats?.cash_revenue || 0,
+      cardRevenue: stats?.card_revenue || 0,
+      avgOrderValue: paidOrders > 0 ? totalRevenue / paidOrders : 0,
+      totalDiscount: stats?.total_discount || 0,
+      peakHour: peakHour?.hour ?? null,
+      peakHourOrders: peakHour?.order_count || 0,
+    };
+  },
+  
+  /**
+   * Get stats for a date range (for charts)
+   */
+  async getDateRangeStats(startDate: Date, endDate: Date): Promise<DailyStatsExtended[]> {
+    const results: DailyStatsExtended[] = [];
+    const current = new Date(startDate);
+    
+    while (current <= endDate) {
+      const stats = await this.getDailyStatsForDate(new Date(current));
+      results.push(stats);
+      current.setDate(current.getDate() + 1);
+    }
+    
+    return results;
+  },
+  
+  /**
+   * Get top-selling products for a date range
+   */
+  async getTopProducts(startDate: Date, endDate: Date, limit: number = 10): Promise<TopProduct[]> {
+    const database = await getDatabase();
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+    
+    const products = await database.getAllAsync<{
+      product_id: string;
+      product_name: string;
+      total_quantity: number;
+      total_revenue: number;
+    }>(`
+      SELECT 
+        oi.product_id,
+        oi.product_name,
+        SUM(oi.quantity) as total_quantity,
+        SUM(oi.price * oi.quantity) as total_revenue
+      FROM order_items oi
+      INNER JOIN orders o ON oi.order_id = o.id
+      WHERE o.status = 'PAID' AND o.created_at >= ? AND o.created_at <= ?
+      GROUP BY oi.product_id, oi.product_name
+      ORDER BY total_quantity DESC
+      LIMIT ?
+    `, [startDate.toISOString(), endDate.toISOString(), limit]);
+    
+    return products.map(p => ({
+      productId: p.product_id,
+      productName: p.product_name,
+      totalQuantity: p.total_quantity,
+      totalRevenue: p.total_revenue,
+    }));
+  },
+  
+  /**
+   * Get hourly breakdown for a specific day
+   */
+  async getHourlyStats(date: Date): Promise<HourlyStats[]> {
+    const database = await getDatabase();
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const hourlyData = await database.getAllAsync<{
+      hour: number;
+      orders: number;
+      revenue: number;
+    }>(`
+      SELECT 
+        CAST(strftime('%H', created_at) AS INTEGER) as hour,
+        COUNT(*) as orders,
+        COALESCE(SUM(total_amount), 0) as revenue
+      FROM orders
+      WHERE status = 'PAID' AND created_at >= ? AND created_at <= ?
+      GROUP BY hour
+      ORDER BY hour
+    `, [startOfDay.toISOString(), endOfDay.toISOString()]);
+    
+    // Fill in all 24 hours
+    const result: HourlyStats[] = [];
+    for (let h = 0; h < 24; h++) {
+      const found = hourlyData.find(d => d.hour === h);
+      result.push({
+        hour: h,
+        orders: found?.orders || 0,
+        revenue: found?.revenue || 0,
+      });
+    }
+    
+    return result;
+  },
+  
+  /**
+   * Get last 7 days trend
+   */
+  async getWeeklyTrend(): Promise<WeeklyTrend[]> {
+    const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    const results: WeeklyTrend[] = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      
+      const stats = await this.getDailyStatsForDate(date);
+      results.push({
+        dayOfWeek: date.getDay(),
+        dayName: dayNames[date.getDay()],
+        orders: stats.paidOrders,
+        revenue: stats.totalRevenue,
+      });
+    }
+    
+    return results;
+  },
+  
+  /**
+   * Get all orders for a specific date (for history view)
+   */
+  async getOrdersForDate(date: Date): Promise<OfflineOrder[]> {
+    const database = await getDatabase();
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const orders = await database.getAllAsync<{
+      id: string;
+      order_number: number;
+      table_number: number | null;
+      customer_name: string | null;
+      status: string;
+      total_amount: number;
+      payment_method: string | null;
+      discount: number;
+      discount_type: string | null;
+      amount_received: number | null;
+      change_amount: number | null;
+      note: string | null;
+      printed: number;
+      created_at: string;
+      paid_at: string | null;
+    }>(`
+      SELECT * FROM orders 
+      WHERE created_at >= ? AND created_at <= ?
+      ORDER BY created_at DESC
+    `, [startOfDay.toISOString(), endOfDay.toISOString()]);
+    
+    const result: OfflineOrder[] = [];
+    
+    for (const order of orders) {
+      const items = await database.getAllAsync<{
+        id: string;
+        product_id: string;
+        product_name: string;
+        price: number;
+        quantity: number;
+        note: string | null;
+      }>(
+        'SELECT * FROM order_items WHERE order_id = ?',
+        [order.id]
+      );
+      
+      result.push({
+        id: order.id,
+        orderNumber: order.order_number,
+        tableNumber: order.table_number ?? 0,
+        customerName: order.customer_name || undefined,
+        status: order.status as OfflineOrder['status'],
+        totalAmount: order.total_amount,
+        paymentMethod: order.payment_method as 'cash' | 'card' | undefined,
+        discount: order.discount,
+        discountType: order.discount_type as 'percent' | 'amount' | undefined,
+        amountReceived: order.amount_received || undefined,
+        changeAmount: order.change_amount || undefined,
+        note: order.note || undefined,
+        printed: order.printed === 1,
+        createdAt: new Date(order.created_at),
+        paidAt: order.paid_at ? new Date(order.paid_at) : undefined,
+        items: items.map(i => ({
+          id: i.id,
+          productId: i.product_id,
+          productName: i.product_name,
+          price: i.price,
+          quantity: i.quantity,
+          note: i.note || undefined,
+        })),
+      });
+    }
+    
+    return result;
+  },
+  
+  /**
+   * Search orders across all dates
+   */
+  async searchOrders(query: string, limit: number = 50): Promise<OfflineOrder[]> {
+    const database = await getDatabase();
+    const searchPattern = `%${query}%`;
+    
+    const orders = await database.getAllAsync<{
+      id: string;
+      order_number: number;
+      table_number: number | null;
+      customer_name: string | null;
+      status: string;
+      total_amount: number;
+      payment_method: string | null;
+      discount: number;
+      discount_type: string | null;
+      amount_received: number | null;
+      change_amount: number | null;
+      note: string | null;
+      printed: number;
+      created_at: string;
+      paid_at: string | null;
+    }>(`
+      SELECT DISTINCT o.* FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      WHERE 
+        CAST(o.order_number AS TEXT) LIKE ?
+        OR CAST(o.table_number AS TEXT) LIKE ?
+        OR CAST(o.total_amount AS TEXT) LIKE ?
+        OR oi.product_name LIKE ?
+      ORDER BY o.created_at DESC
+      LIMIT ?
+    `, [searchPattern, searchPattern, searchPattern, searchPattern, limit]);
+    
+    const result: OfflineOrder[] = [];
+    
+    for (const order of orders) {
+      const items = await database.getAllAsync<{
+        id: string;
+        product_id: string;
+        product_name: string;
+        price: number;
+        quantity: number;
+        note: string | null;
+      }>(
+        'SELECT * FROM order_items WHERE order_id = ?',
+        [order.id]
+      );
+      
+      result.push({
+        id: order.id,
+        orderNumber: order.order_number,
+        tableNumber: order.table_number ?? 0,
+        customerName: order.customer_name || undefined,
+        status: order.status as OfflineOrder['status'],
+        totalAmount: order.total_amount,
+        paymentMethod: order.payment_method as 'cash' | 'card' | undefined,
+        discount: order.discount,
+        discountType: order.discount_type as 'percent' | 'amount' | undefined,
+        amountReceived: order.amount_received || undefined,
+        changeAmount: order.change_amount || undefined,
+        note: order.note || undefined,
+        printed: order.printed === 1,
+        createdAt: new Date(order.created_at),
+        paidAt: order.paid_at ? new Date(order.paid_at) : undefined,
+        items: items.map(i => ({
+          id: i.id,
+          productId: i.product_id,
+          productName: i.product_name,
+          price: i.price,
+          quantity: i.quantity,
+          note: i.note || undefined,
+        })),
+      });
+    }
+    
+    return result;
+  },
+};

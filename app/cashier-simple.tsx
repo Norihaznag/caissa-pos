@@ -65,6 +65,7 @@ import { PrinterService, type ReceiptData as PrinterReceiptData } from '../lib/s
 import { hasPermission, type UserRole } from '../lib/permissions';
 import AdminPanel from '../components/AdminPanel';
 import UnifiedPrinterModal from '../components/UnifiedPrinterModal';
+import AnalyticsDashboard from '../components/AnalyticsDashboard';
 
 // Types
 interface CartItem {
@@ -188,6 +189,7 @@ export default function CashierSimpleScreen() {
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showOrdersModal, setShowOrdersModal] = useState(false);
+  const [showAnalyticsDashboard, setShowAnalyticsDashboard] = useState(false);
   const [todayOrders, setTodayOrders] = useState<OfflineOrder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -684,12 +686,28 @@ export default function CashierSimpleScreen() {
   };
 
   const clearCart = () => {
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    } catch {}
-    setCart([]);
-    setSelectedTable(0);
-    setCurrentOrderId(null);
+    // Safety confirmation for non-empty cart
+    if (cart.length === 0) return;
+    
+    Alert.alert(
+      '🗑️ Vider le panier',
+      `Voulez-vous vraiment vider le panier ? (${cart.reduce((s, i) => s + i.quantity, 0)} articles)`,
+      [
+        { text: 'Non', style: 'cancel' },
+        {
+          text: 'Oui, vider',
+          style: 'destructive',
+          onPress: () => {
+            try {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            } catch {}
+            setCart([]);
+            setSelectedTable(0);
+            setCurrentOrderId(null);
+          },
+        },
+      ]
+    );
   };
 
   // Hold current order (save without paying)
@@ -1282,7 +1300,7 @@ export default function CashierSimpleScreen() {
             {/* Report */}
             {hasPermission(user?.role as UserRole, 'view_daily_report') && (
               <TouchableOpacity
-                onPress={() => setShowReportModal(true)}
+                onPress={() => setShowAnalyticsDashboard(true)}
                 style={{ 
                   width: 36, 
                   height: 36, 
@@ -2643,6 +2661,41 @@ export default function CashierSimpleScreen() {
           
           {/* Orders Grid Content */}
           <View style={{ flex: 1, backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+            {/* 🔍 Search Bar */}
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center',
+              backgroundColor: colors.white,
+              marginHorizontal: spacing.lg,
+              marginTop: spacing.lg,
+              marginBottom: spacing.sm,
+              borderRadius: borderRadius.lg,
+              paddingHorizontal: spacing.md,
+              ...shadows.sm,
+            }}>
+              <Search size={20} color={colors.textMuted} />
+              <TextInput
+                style={{
+                  flex: 1,
+                  paddingVertical: spacing.md,
+                  paddingHorizontal: spacing.sm,
+                  fontSize: fontSize.md,
+                  color: colors.textPrimary,
+                }}
+                placeholder="Rechercher par n° commande, table ou montant..."
+                placeholderTextColor={colors.textMuted}
+                value={ordersSearchQuery}
+                onChangeText={setOrdersSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {ordersSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setOrdersSearchQuery('')}>
+                  <X size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+            
             <FlatList
               data={(() => {
                 let orders = ordersFilter === 'pending' 
@@ -2650,6 +2703,23 @@ export default function CashierSimpleScreen() {
                   : ordersFilter === 'paid' 
                     ? todayOrders.filter(o => o.status === 'PAID')
                     : [...todayOrders, ...pendingOrders.filter(p => !todayOrders.find(t => t.id === p.id))];
+                
+                // 🔍 Apply search filter
+                if (ordersSearchQuery.trim()) {
+                  const query = ordersSearchQuery.toLowerCase().trim();
+                  orders = orders.filter(order => {
+                    // Search by order number
+                    if (order.orderNumber?.toString().includes(query)) return true;
+                    // Search by table number
+                    if (order.tableNumber?.toString().includes(query)) return true;
+                    // Search by amount
+                    if (order.totalAmount.toString().includes(query)) return true;
+                    // Search by product names
+                    if (order.items.some(item => item.productName.toLowerCase().includes(query))) return true;
+                    return false;
+                  });
+                }
+                
                 return orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
               })()}
               keyExtractor={(item) => item.id}
@@ -3773,6 +3843,12 @@ export default function CashierSimpleScreen() {
         visible={showAdminPanel}
         onClose={() => setShowAdminPanel(false)}
         onDataChanged={refreshAllData}
+      />
+
+      {/* Analytics Dashboard */}
+      <AnalyticsDashboard
+        visible={showAnalyticsDashboard}
+        onClose={() => setShowAnalyticsDashboard(false)}
       />
 
       {/* Unified Printer Modal - Bluetooth/WiFi/USB */}
