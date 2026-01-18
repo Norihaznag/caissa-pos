@@ -1,4 +1,4 @@
-package com.caissapro.app.printing
+package com.caissapro.app
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule

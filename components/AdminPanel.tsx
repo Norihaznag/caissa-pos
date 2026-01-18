@@ -70,6 +70,7 @@ import {
 } from '../lib/printing';
 import { PrinterService, type PrinterState, type PrinterDevice } from '../lib/services/PrinterService';
 import UnifiedPrinterModal from './UnifiedPrinterModal';
+import StaffManagement from './StaffManagement';
 
 interface AdminPanelProps {
   visible: boolean;
@@ -151,6 +152,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
   const [restaurantAddress, setRestaurantAddress] = useState('');
   const [restaurantPhone, setRestaurantPhone] = useState('');
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
+  const [autoOpenDrawer, setAutoOpenDrawer] = useState(true);
   
   // Printer State (using new PrinterService)
   const [printerState, setPrinterState] = useState<PrinterState>({
@@ -176,6 +178,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
   
   // Receipt Design
   const [showReceiptDesignModal, setShowReceiptDesignModal] = useState(false);
+  const [showStaffManagement, setShowStaffManagement] = useState(false);
   const [receiptDesign, setReceiptDesign] = useState<ReceiptDesign>({
     showLogo: false,
     restaurantName: 'CaissaPro',
@@ -264,6 +267,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
     setRestaurantAddress(allSettings['restaurant_address'] || '');
     setRestaurantPhone(allSettings['restaurant_phone'] || '');
     setAutoPrintReceipt(allSettings['auto_print_receipt'] === 'true');
+    setAutoOpenDrawer(allSettings['auto_open_drawer'] !== 'false');
     
     // Load receipt design
     const savedDesign = await loadReceiptDesign();
@@ -691,6 +695,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
       await offlineSettingsService.set('restaurant_address', restaurantAddress);
       await offlineSettingsService.set('restaurant_phone', restaurantPhone);
       await offlineSettingsService.set('auto_print_receipt', autoPrintReceipt ? 'true' : 'false');
+      await offlineSettingsService.set('auto_open_drawer', autoOpenDrawer ? 'true' : 'false');
       
       // Save printer config via PrinterService
       await PrinterService.saveConfig({
@@ -821,6 +826,25 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           </View>
           <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Paramètres</Text>
           <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Configuration</Text>
+        </TouchableOpacity>
+
+        {/* Staff Management - v2.3 */}
+        <TouchableOpacity
+          onPress={() => setShowStaffManagement(true)}
+          style={{
+            width: isTablet ? 180 : '47%',
+            alignItems: 'center',
+            backgroundColor: colors.white,
+            padding: spacing.xl,
+            borderRadius: borderRadius.lg,
+            ...shadows.sm,
+          }}
+        >
+          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
+            <Users size={28} color="#16A34A" />
+          </View>
+          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>👥 Équipe</Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Shifts & Salaires</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -1571,6 +1595,39 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               </Text>
               <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>
                 Imprimer le reçu après chaque paiement
+              </Text>
+            </View>
+          </TouchableOpacity>
+          
+          {/* Auto Open Cash Drawer Toggle */}
+          <TouchableOpacity
+            onPress={() => setAutoOpenDrawer(!autoOpenDrawer)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: spacing.md,
+              backgroundColor: autoOpenDrawer ? '#FFF3E0' : colors.background,
+              borderRadius: borderRadius.lg,
+              gap: spacing.md,
+              marginBottom: spacing.md,
+            }}
+          >
+            <View style={{
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              backgroundColor: autoOpenDrawer ? '#E65100' : colors.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              {autoOpenDrawer && <Check size={16} color={colors.white} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: fontSize.sm, color: colors.textPrimary, fontWeight: '500' }}>
+                Ouvrir tiroir-caisse
+              </Text>
+              <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>
+                Ouvrir automatiquement lors d'un paiement espèces
               </Text>
             </View>
           </TouchableOpacity>
@@ -2526,6 +2583,12 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
             </View>
           </View>
         </Modal>
+
+        {/* Staff Management Modal - v2.3 */}
+        <StaffManagement
+          visible={showStaffManagement}
+          onClose={() => setShowStaffManagement(false)}
+        />
       </View>
     </Modal>
   );

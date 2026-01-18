@@ -136,6 +136,98 @@ export const initOfflineDatabase = async (): Promise<void> => {
     );
   `);
   
+  // ========== v2.3: SHIFTS TABLE ==========
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS shifts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      opened_at TEXT NOT NULL,
+      closed_at TEXT,
+      opening_amount REAL DEFAULT 0,
+      closing_amount REAL,
+      total_sales REAL DEFAULT 0,
+      cash_sales REAL DEFAULT 0,
+      card_sales REAL DEFAULT 0,
+      total_orders INTEGER DEFAULT 0,
+      total_discounts REAL DEFAULT 0,
+      total_change_given REAL DEFAULT 0,
+      cancelled_orders INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'OPEN',
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+  `);
+  
+  // ========== v2.3: PAYROLL TABLE ==========
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS payroll (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      period_start TEXT NOT NULL,
+      period_end TEXT NOT NULL,
+      salary_type TEXT NOT NULL DEFAULT 'monthly',
+      base_salary REAL NOT NULL DEFAULT 0,
+      hourly_rate REAL,
+      overtime_rate REAL,
+      total_hours REAL,
+      overtime_hours REAL,
+      bonuses REAL DEFAULT 0,
+      deductions REAL DEFAULT 0,
+      advances REAL DEFAULT 0,
+      total_payable REAL NOT NULL DEFAULT 0,
+      paid_amount REAL DEFAULT 0,
+      payment_status TEXT NOT NULL DEFAULT 'unpaid',
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      paid_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+  `);
+  
+  // ========== v2.3: PLANNED SHIFTS TABLE ==========
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS planned_shifts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      role TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+  `);
+  
+  // ========== v2.3: STAFF COMPENSATION TABLE ==========
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS staff_compensation (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE,
+      salary_type TEXT NOT NULL DEFAULT 'monthly',
+      base_salary REAL DEFAULT 0,
+      hourly_rate REAL DEFAULT 0,
+      overtime_rate REAL DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+  `);
+  
+  // ========== v2.3: INDEXES FOR PERFORMANCE ==========
+  try {
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_shifts_user_opened ON shifts(user_id, opened_at)');
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_orders_paid_at ON orders(paid_at)');
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_orders_cashier ON orders(cashier_id)');
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_orders_shift ON orders(shift_id)');
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_payroll_user_period ON payroll(user_id, period_start)');
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_planned_shifts_date ON planned_shifts(date)');
+    console.log('v2.3 indexes created successfully');
+  } catch (indexError) {
+    console.warn('Index creation warning:', indexError);
+  }
+  
   // ========== MIGRATIONS ==========
   // Add new columns to existing orders table if they don't exist
   try {
@@ -187,6 +279,22 @@ export const initOfflineDatabase = async (): Promise<void> => {
     if (!productColumns.includes('low_stock_threshold')) {
       await database.execAsync('ALTER TABLE products ADD COLUMN low_stock_threshold INTEGER DEFAULT 10');
       console.log('Migration: Added low_stock_threshold column to products');
+    }
+    
+    // ========== v2.3 MIGRATIONS: Shifts, Payroll, Staff Attribution ==========
+    
+    // Add cashier_id and waiter_id to orders table for staff attribution
+    if (!columnNames.includes('cashier_id')) {
+      await database.execAsync('ALTER TABLE orders ADD COLUMN cashier_id TEXT');
+      console.log('Migration: Added cashier_id column to orders');
+    }
+    if (!columnNames.includes('waiter_id')) {
+      await database.execAsync('ALTER TABLE orders ADD COLUMN waiter_id TEXT');
+      console.log('Migration: Added waiter_id column to orders');
+    }
+    if (!columnNames.includes('shift_id')) {
+      await database.execAsync('ALTER TABLE orders ADD COLUMN shift_id TEXT');
+      console.log('Migration: Added shift_id column to orders');
     }
     
     console.log('Database migrations completed successfully');

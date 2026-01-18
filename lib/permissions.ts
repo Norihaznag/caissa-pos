@@ -26,7 +26,12 @@ export type Permission =
   | 'manage_expenses'
   | 'configure_printer'
   | 'configure_receipt_design'
-  | 'view_analytics';
+  | 'view_analytics'
+  // v2.3: Staff Management (Admin only)
+  | 'manage_shifts'
+  | 'manage_payroll'
+  | 'view_staff_analytics'
+  | 'manage_schedule';
 
 // Define permissions for each role
 const rolePermissions: Record<UserRole, Permission[]> = {
@@ -44,6 +49,11 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     'print_daily_report',
     'view_daily_report', // Needed to print reports
     'view_all_orders', // Can view orders for management
+    // v2.3: Staff Management (Admin only)
+    'manage_shifts',
+    'manage_payroll',
+    'view_staff_analytics',
+    'manage_schedule',
   ],
   
   cashier: [
@@ -114,6 +124,11 @@ export const permissionLabels: Record<Permission, string> = {
   configure_printer: 'Configurer l\'imprimante',
   configure_receipt_design: 'Personnaliser les reçus',
   view_analytics: 'Voir les statistiques',
+  // v2.3: Staff Management
+  manage_shifts: 'Gérer les shifts',
+  manage_payroll: 'Gérer les salaires',
+  view_staff_analytics: 'Voir performance équipe',
+  manage_schedule: 'Gérer le planning',
 };
 
 // Role labels

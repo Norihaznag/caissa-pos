@@ -1,8 +1,32 @@
+/**
+ * ⚠️ DEPRECATED - Legacy Printing Module
+ * 
+ * This file is kept for backward compatibility only.
+ * All printing operations should use lib/services/PrinterService.ts instead.
+ * 
+ * @deprecated Use PrinterService from 'lib/services/PrinterService' instead
+ * @version 3.0.0 - Marked as deprecated
+ */
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Platform, PermissionsAndroid, Linking, NativeModules, NativeEventEmitter } from 'react-native';
 import BluetoothPrinterService from './BluetoothPrinterService';
 import UnifiedPrinterService, { PrinterDevice, PrinterType as UnifiedPrinterType } from './UnifiedPrinterService';
 import { thermalPrinterService, ReceiptData as ThermalReceiptData } from './ThermalPrinterService';
+
+// ============================================================================
+// ⚠️ DEPRECATION NOTICE
+// ============================================================================
+// 
+// This module is DEPRECATED. Use PrinterService instead:
+// 
+// import { PrinterService } from '@/lib/services/PrinterService';
+// await PrinterService.printReceipt(receiptData);
+// 
+// The functions in this file are kept for backward compatibility but will
+// log deprecation warnings when used.
+// 
+// ============================================================================
 
 // Storage keys
 const PRINTER_CONFIG_KEY = 'pos_printer_config';

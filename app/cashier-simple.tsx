@@ -41,6 +41,7 @@ import {
   Bluetooth,
   BluetoothConnected,
   Zap,
+  Inbox,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -60,7 +61,7 @@ import {
   OfflineOrderItem,
   clearInvalidSyncQueueItems,
 } from '../lib/offline-db';
-import { loadPrinterConfig, printReceipt, ReceiptData, printDailyReport, DailyReportData, BluetoothPrinterService, quickPrintReceipt, UnifiedPrinterService, loadReceiptDesign } from '../lib/printing';
+import { loadPrinterConfig, printReceipt, ReceiptData, printDailyReport, DailyReportData, BluetoothPrinterService, quickPrintReceipt, UnifiedPrinterService, loadReceiptDesign, openCashDrawerNative } from '../lib/printing';
 import { PrinterService, type ReceiptData as PrinterReceiptData } from '../lib/services/PrinterService';
 import { hasPermission, type UserRole } from '../lib/permissions';
 import AdminPanel from '../components/AdminPanel';
@@ -359,6 +360,30 @@ export default function CashierSimpleScreen() {
       ]);
     } catch (error) {
       console.error('Refresh error:', error);
+    }
+  };
+
+  // Open cash drawer manually
+  const handleOpenCashDrawer = async () => {
+    try {
+      const connected = await PrinterService.checkConnection();
+      if (!connected) {
+        Alert.alert('Imprimante non connectée', 'Connectez l\'imprimante pour ouvrir le tiroir-caisse.');
+        return;
+      }
+      
+      console.log('[CASH_DRAWER] Manual drawer open requested...');
+      const success = await openCashDrawerNative();
+      
+      if (success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        console.log('[CASH_DRAWER] ✅ Drawer opened manually');
+      } else {
+        Alert.alert('Erreur', 'Impossible d\'ouvrir le tiroir-caisse');
+      }
+    } catch (error) {
+      console.error('[CASH_DRAWER] Manual open error:', error);
+      Alert.alert('Erreur', 'Erreur lors de l\'ouverture du tiroir-caisse');
     }
   };
 
@@ -815,8 +840,8 @@ export default function CashierSimpleScreen() {
       const design = await loadReceiptDesign();
       console.log('[PRINT_RECEIPT] Design loaded:', design.restaurantName);
       
-      // Build order number - use last 4 digits of order ID if no explicit order number
-      const orderNumber = order.id.slice(-4).toUpperCase();
+      // Use the order's actual order_number from SQLite (same as UI shows)
+      const orderNumber = order.orderNumber || 0;
       
       const receiptData: PrinterReceiptData = {
         // Header - use design settings
@@ -828,7 +853,7 @@ export default function CashierSimpleScreen() {
         
         // Order info
         orderId: order.id,
-        orderNumber: parseInt(orderNumber, 16) || parseInt(order.id.slice(-6), 16) || 0,
+        orderNumber: orderNumber,
         tableNumber: order.tableNumber || 0,
         waiterName: user?.name || 'Caissier',
         date: order.createdAt.toLocaleString('fr-FR', {
@@ -987,6 +1012,22 @@ export default function CashierSimpleScreen() {
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {}
+      
+      // Open cash drawer for cash payments
+      if (paymentMethod === 'cash') {
+        try {
+          const autoOpenDrawer = await offlineSettingsService.get('auto_open_drawer');
+          const printerConnected = await PrinterService.checkConnection();
+          
+          if (autoOpenDrawer !== 'false' && printerConnected) {
+            console.log('[CASH_DRAWER] Opening drawer for cash payment...');
+            await openCashDrawerNative();
+            console.log('[CASH_DRAWER] ✅ Drawer opened');
+          }
+        } catch (drawerError) {
+          console.error('[CASH_DRAWER] Error opening drawer:', drawerError);
+        }
+      }
       
       // Auto-print receipt if enabled AND printer is connected
       try {
@@ -1328,6 +1369,23 @@ export default function CashierSimpleScreen() {
                 }}
               >
                 <Settings size={20} color="#1C1E21" />
+              </TouchableOpacity>
+            )}
+            
+            {/* Cash Drawer - Opens via printer */}
+            {printerConnected && (
+              <TouchableOpacity
+                onPress={handleOpenCashDrawer}
+                style={{ 
+                  width: 36, 
+                  height: 36, 
+                  borderRadius: 18, 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  backgroundColor: '#FFF3E0',
+                }}
+              >
+                <Inbox size={20} color="#E65100" />
               </TouchableOpacity>
             )}
             

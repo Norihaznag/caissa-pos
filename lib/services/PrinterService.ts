@@ -4,7 +4,7 @@
  * Single source of truth for all printing operations.
  * Uses ThermalPrinterModule (native Kotlin) for reliable ESC/POS printing.
  * 
- * @version 2.3.0 - Fixed receipt printing with proper ESC/POS encoding
+ * @version 3.0.0 - Added print lock, improved connection verification
  */
 
 import { NativeModules, NativeEventEmitter, Platform, Alert } from 'react-native';
@@ -141,6 +141,12 @@ if (ThermalPrinterModule && Platform.OS === 'android') {
 // PRINTER SERVICE CLASS
 // ============================================================================
 
+interface PrintQueueItem {
+  data: ReceiptData;
+  resolve: (value: boolean) => void;
+  reject: (reason: any) => void;
+}
+
 class PrinterServiceClass {
   private state: PrinterState = {
     status: 'disconnected',
@@ -152,6 +158,12 @@ class PrinterServiceClass {
   private config: PrinterConfig = { ...DEFAULT_CONFIG };
   private listeners: ((state: PrinterState) => void)[] = [];
   private eventSubscriptions: any[] = [];
+  
+  // Print lock to prevent duplicate/concurrent prints
+  private printLock: boolean = false;
+  private printQueue: PrintQueueItem[] = [];
+  private lastPrintTime: number = 0;
+  private readonly MIN_PRINT_INTERVAL = 1000; // 1 second between prints
 
   // ==========================================================================
   // INITIALIZATION
@@ -424,6 +436,51 @@ class PrinterServiceClass {
     }
   }
 
+  /**
+   * Verify native module connection state
+   * More thorough check than checkConnection - queries the actual socket state
+   */
+  async verifyNativeConnection(): Promise<boolean> {
+    if (!ThermalPrinterModule) {
+      console.log('[PrinterService] Native module not available');
+      return false;
+    }
+
+    try {
+      const status = await ThermalPrinterModule.getConnectionStatus();
+      console.log('[PrinterService] Native connection status:', status);
+      
+      const isConnected = status.isConnected === true;
+      const transport = status.transport || 'none';
+      const address = status.address || '';
+      
+      // Update local state to match native state
+      if (isConnected) {
+        this.state.status = 'connected';
+        if (!this.state.device && address) {
+          this.state.device = {
+            id: address,
+            name: this.config.deviceName || 'Imprimante',
+            address: address,
+            type: transport as PrinterConnectionType,
+          };
+        }
+      } else {
+        this.state.status = 'disconnected';
+        this.state.device = null;
+      }
+      
+      this.notifyListeners();
+      return isConnected;
+    } catch (error) {
+      console.error('[PrinterService] verifyNativeConnection error:', error);
+      this.state.status = 'disconnected';
+      this.state.device = null;
+      this.notifyListeners();
+      return false;
+    }
+  }
+
   // ==========================================================================
   // PRINTING
   // ==========================================================================
@@ -459,15 +516,59 @@ class PrinterServiceClass {
   /**
    * Print a full receipt using the native module's byte-based printing
    * This ensures proper ESC/POS encoding for all control codes
+   * Includes print lock to prevent duplicate/concurrent prints
    */
   async printReceipt(data: ReceiptData): Promise<boolean> {
+    // Check for rapid duplicate prints (debounce)
+    const now = Date.now();
+    if (now - this.lastPrintTime < this.MIN_PRINT_INTERVAL) {
+      console.log('[PrinterService] Print debounced - too soon after last print');
+      return false;
+    }
+
+    // If already printing, queue this request
+    if (this.printLock) {
+      console.log('[PrinterService] Print lock active - queuing print request');
+      return new Promise((resolve, reject) => {
+        this.printQueue.push({ data, resolve, reject });
+      });
+    }
+
+    // Acquire lock
+    this.printLock = true;
+    this.lastPrintTime = now;
+    console.log('[PrinterService] Print lock acquired');
+
+    try {
+      const result = await this._executePrint(data);
+      return result;
+    } finally {
+      // Release lock
+      this.printLock = false;
+      console.log('[PrinterService] Print lock released');
+
+      // Process next item in queue
+      if (this.printQueue.length > 0) {
+        const next = this.printQueue.shift();
+        if (next) {
+          console.log('[PrinterService] Processing queued print');
+          this.printReceipt(next.data).then(next.resolve).catch(next.reject);
+        }
+      }
+    }
+  }
+
+  /**
+   * Internal print execution - called by printReceipt after acquiring lock
+   */
+  private async _executePrint(data: ReceiptData): Promise<boolean> {
     if (!ThermalPrinterModule) {
       this.showError('Module d\'impression non disponible');
       return false;
     }
 
-    // Check connection
-    const isConnected = await this.checkConnection();
+    // Verify connection with native module (not just cached state)
+    const isConnected = await this.verifyNativeConnection();
     if (!isConnected) {
       const reconnected = await this.reconnect();
       if (!reconnected) {
@@ -499,7 +600,7 @@ class PrinterServiceClass {
         
         // Order info
         orderId: data.orderId,
-        orderNumber: data.orderNumber?.toString() || data.orderId.slice(-6).toUpperCase(),
+        orderNumber: data.orderNumber?.toString() || '0',
         tableNumber: data.tableNumber || 0,
         waiterName: data.waiterName || '',
         date: data.date,
