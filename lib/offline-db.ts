@@ -826,17 +826,17 @@ export interface Expense {
 }
 
 export const EXPENSE_CATEGORIES = [
-  'Fournisseur',
-  'Marché / Courses',
-  'Lait & Café',
-  'Pain & Pâtisserie',
-  'Boissons',
-  'Réparation',
-  'Nettoyage',
-  'Avance Salaire',
-  'Loyer',
-  'Électricité / Eau',
-  'Autre',
+  { id: 'fournisseur', label: 'Fournisseur' },
+  { id: 'marche', label: 'Marché / Courses' },
+  { id: 'lait_cafe', label: 'Lait & Café' },
+  { id: 'pain', label: 'Pain & Pâtisserie' },
+  { id: 'boissons', label: 'Boissons' },
+  { id: 'reparation', label: 'Réparation' },
+  { id: 'nettoyage', label: 'Nettoyage' },
+  { id: 'avance_salaire', label: 'Avance Salaire' },
+  { id: 'loyer', label: 'Loyer' },
+  { id: 'electricite', label: 'Électricité / Eau' },
+  { id: 'autre', label: 'Autre' },
 ] as const;
 
 export const offlineExpenseService = {

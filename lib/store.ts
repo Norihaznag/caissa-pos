@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { LicenseData } from './license';
 
 // Types
 export type UserRole = 'admin' | 'waiter' | 'kitchen' | 'cashier' | null;
@@ -80,6 +81,10 @@ export interface SyncQueueItem {
 
 // Store State
 interface AppState {
+  // License
+  license: LicenseData | null;
+  isLicensed: boolean;
+  
   // User session
   user: User | null;
   isAuthenticated: boolean;
@@ -94,6 +99,10 @@ interface AppState {
   syncQueue: SyncQueueItem[];
   isOnline: boolean;
   lastSyncAt: Date | null;
+  
+  // Actions - License
+  setLicense: (license: LicenseData | null) => void;
+  clearLicense: () => void;
   
   // Actions - Auth
   login: (user: User) => void;
@@ -156,6 +165,8 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       // Initial State
+      license: null,
+      isLicensed: false,
       user: null,
       isAuthenticated: false,
       categories: [],
@@ -165,6 +176,10 @@ export const useAppStore = create<AppState>()(
       syncQueue: [],
       isOnline: true,
       lastSyncAt: null,
+
+      // License Actions
+      setLicense: (license) => set({ license, isLicensed: !!license }),
+      clearLicense: () => set({ license: null, isLicensed: false }),
 
       // Auth Actions
       login: (user) => set({ user, isAuthenticated: true }),

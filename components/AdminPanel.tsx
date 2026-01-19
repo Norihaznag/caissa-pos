@@ -44,11 +44,13 @@ import {
   Minus,
   BluetoothConnected,
   Zap,
+  Palette,
 } from 'lucide-react-native';
 import * as Crypto from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { colors, spacing, borderRadius, fontSize, shadows } from '../lib/theme';
+import { colors as staticColors, spacing, borderRadius, fontSize, shadows } from '../lib/theme';
+import { useAppTheme } from '../lib/themes/ThemeContext';
 import {
   offlineCategoryService,
   offlineProductService,
@@ -70,6 +72,7 @@ import {
 } from '../lib/printing';
 import { PrinterService, type PrinterState, type PrinterDevice } from '../lib/services/PrinterService';
 import UnifiedPrinterModal from './UnifiedPrinterModal';
+import AppearanceSettings from './AppearanceSettings';
 // StaffManagement removed - shifts feature disabled
 
 interface AdminPanelProps {
@@ -78,7 +81,7 @@ interface AdminPanelProps {
   onDataChanged: () => void;
 }
 
-type AdminTab = 'menu' | 'products' | 'categories' | 'users' | 'settings';
+type AdminTab = 'menu' | 'products' | 'categories' | 'users' | 'settings' | 'appearance';
 
 interface Category {
   id: string;
@@ -103,6 +106,9 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
+  
+  // Get dynamic theme colors
+  const { colors } = useAppTheme();
   
   // Calculate responsive grid columns and card width
   const CARD_MIN_WIDTH = 150;
@@ -834,6 +840,24 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Configuration</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          onPress={() => setActiveTab('appearance')}
+          style={{
+            width: isTablet ? 180 : '47%',
+            alignItems: 'center',
+            backgroundColor: colors.white,
+            padding: spacing.xl,
+            borderRadius: borderRadius.lg,
+            ...shadows.sm,
+          }}
+        >
+          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: '#FDF2F8', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
+            <Palette size={28} color="#EC4899" />
+          </View>
+          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Apparence</Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Thèmes & Couleurs</Text>
+        </TouchableOpacity>
+
         {/* Staff Management removed */}
       </View>
     </View>
@@ -1435,7 +1459,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               borderRadius: 20,
               backgroundColor: printerState.status === 'connected' ? colors.success : 
                              printerState.status === 'connecting' ? colors.warning :
-                             printerState.status === 'error' ? colors.danger : colors.textMuted,
+                             printerState.status === 'error' ? colors.error : colors.textMuted,
               alignItems: 'center',
               justifyContent: 'center',
             }}>
@@ -1472,7 +1496,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               <TouchableOpacity
                 onPress={() => PrinterService.disconnect()}
                 style={{
-                  backgroundColor: colors.danger,
+                  backgroundColor: colors.error,
                   paddingHorizontal: spacing.md,
                   paddingVertical: spacing.sm,
                   borderRadius: borderRadius.md,
@@ -1693,6 +1717,28 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
     </View>
   );
 
+  const renderAppearanceTab = () => (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Header */}
+      <View style={{ 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        padding: spacing.lg, 
+        backgroundColor: colors.white, 
+        borderBottomWidth: 1, 
+        borderBottomColor: colors.borderLight,
+        ...shadows.sm,
+      }}>
+        <TouchableOpacity onPress={() => setActiveTab('menu')} style={{ padding: spacing.sm }}>
+          <ChevronLeft size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={{ flex: 1, fontSize: fontSize.lg, fontWeight: '600', color: colors.textPrimary, marginLeft: spacing.sm }}>Apparence</Text>
+      </View>
+      
+      <AppearanceSettings />
+    </View>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case 'menu': return renderMenuTab();
@@ -1700,6 +1746,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
       case 'products': return renderProductsTab();
       case 'users': return renderUsersTab();
       case 'settings': return renderSettingsTab();
+      case 'appearance': return renderAppearanceTab();
       default: return renderMenuTab();
     }
   };

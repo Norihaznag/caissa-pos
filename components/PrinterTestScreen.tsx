@@ -380,7 +380,7 @@ export const PrinterTestScreen: React.FC<Props> = ({ visible = true, onClose }) 
     <View style={styles.tabContent}>
       {usbDevices.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="usb" size={48} color={COLORS.textSecondary} />
+          <Ionicons name="hardware-chip-outline" size={48} color={COLORS.textSecondary} />
           <Text style={styles.emptyText}>Aucun périphérique USB détecté</Text>
           <Text style={styles.emptySubtext}>
             Branchez votre imprimante USB et actualisez

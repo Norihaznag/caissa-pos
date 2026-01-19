@@ -1172,15 +1172,15 @@ export const printWithNativeService = async (receiptData: ReceiptData): Promise<
       items: receiptData.items.map(item => ({
         name: item.name,
         quantity: item.quantity,
-        price: item.price,
+        price: item.unitPrice,
         total: item.total,
       })),
       subtotal: receiptData.subtotal,
       tax: receiptData.tax,
       discount: receiptData.discount,
       total: receiptData.total,
-      footer: receiptData.footerMessage,
-      date: `${receiptData.date} ${receiptData.time}`,
+      footer: '',
+      date: receiptData.date,
     };
     
     return await thermalPrinterService.printReceipt(thermalData);

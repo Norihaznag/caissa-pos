@@ -47,7 +47,8 @@ import * as Haptics from 'expo-haptics';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as Crypto from 'expo-crypto';
 import { useAppStore } from '../lib/store';
-import { colors, spacing, borderRadius, fontSize, fontSizeTablet, shadows, touchTargets } from '../lib/theme';
+import { spacing, borderRadius, fontSize, fontSizeTablet, shadows, touchTargets } from '../lib/theme';
+import { useAppTheme } from '../lib/themes/ThemeContext';
 import { 
   initOfflineDatabase, 
   offlineCategoryService, 
@@ -123,6 +124,9 @@ export default function CashierSimpleScreen() {
   const logout = useAppStore((state) => state.logout);
   const user = useAppStore((state) => state.user);
   
+  // Get dynamic theme colors
+  const { colors } = useAppTheme();
+  
   // Responsive dimensions
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -171,6 +175,7 @@ export default function CashierSimpleScreen() {
       md: isPhone ? 15 : 17,
       lg: isPhone ? 18 : 20,
       xl: isPhone ? 22 : 26,
+      xxl: isPhone ? 28 : 34,
     },
     // Card dimensions
     cardWidth: cardWidth,
@@ -260,31 +265,31 @@ export default function CashierSimpleScreen() {
   const [sessionOpeningAmount, setSessionOpeningAmount] = useState('');
   const [sessionClosingAmount, setSessionClosingAmount] = useState('');
 
-  // Mode-specific header colors (FB Lite style) - MUST be before any early returns
+  // Mode-specific header colors - Uses theme primary color
   const modeConfig = useMemo(() => {
     const role = user?.role || 'cashier';
     switch (role) {
       case 'admin':
         return {
-          color: '#1877F2', // FB Blue
+          color: colors.primary, // Theme primary color
           title: '⚙️ Mode Admin',
           subtitle: 'Configuration & Paramètres',
         };
       case 'waiter':
         return {
-          color: '#F5793B', // Orange
+          color: colors.warning || colors.primary, // Use warning or fallback to primary
           title: '🍽️ Mode Serveur',
           subtitle: 'Prise de commandes',
         };
       case 'cashier':
       default:
         return {
-          color: '#31A24C', // Green
+          color: colors.success || colors.primary, // Use success or fallback to primary
           title: '💰 Mode Caisse',
           subtitle: 'Ventes & Encaissements',
         };
     }
-  }, [user?.role]);
+  }, [user?.role, colors]);
 
   // Allow auto-rotation based on user's device settings
   useEffect(() => {
@@ -469,7 +474,7 @@ export default function CashierSimpleScreen() {
           year: 'numeric' 
         }),
         restaurantName: 'CaissaPro',
-        cashierName: currentUser?.name || 'Admin',
+        cashierName: user?.name || 'Admin',
         // Sales
         totalRevenue: dailyStats.totalRevenue,
         cashRevenue: dailyStats.cashRevenue,
@@ -698,7 +703,7 @@ export default function CashierSimpleScreen() {
     try {
       await offlineExpenseService.create({
         amount,
-        category: expenseCategory,
+        category: expenseCategory.id,
         description: expenseDescription.trim() || undefined,
         createdBy: user?.name,
       });
@@ -1176,7 +1181,7 @@ export default function CashierSimpleScreen() {
         console.log('[AUTO_PRINT] Printer connected =', printerConnected);
         console.log('[AUTO_PRINT] Order ID =', newOrder.id);
         console.log('[AUTO_PRINT] Items count =', newOrder.items.length);
-        console.log('[AUTO_PRINT] Total =', newOrder.total);
+        console.log('[AUTO_PRINT] Total =', newOrder.totalAmount);
         
         // Check both: user wants auto-print AND printer is connected
         if (autoPrintEnabled === 'true' && printerConnected) {
@@ -1311,110 +1316,124 @@ export default function CashierSimpleScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header - Facebook Lite Style with Mode Color */}
-      <View style={{ 
-        backgroundColor: modeConfig.color,
-        paddingBottom: spacing.sm,
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-      }}>
-        {/* Top Row - Mode Title and Actions */}
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#EDEDED' }}>
+      {/* Header - Exact macOS Title Bar */}
+      <LinearGradient
+        colors={['#CACACA', '#A7A7A7', '#8A8A8A']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={{ 
+          borderBottomWidth: 1,
+          borderBottomColor: '#545454',
+        }}
+      >
+        {/* Title Bar Row */}
         <View style={{ 
           flexDirection: 'row', 
           alignItems: 'center', 
           justifyContent: 'space-between',
-          paddingHorizontal: spacing.md,
-          paddingTop: spacing.sm,
-          paddingBottom: spacing.xs,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          minHeight: 44,
         }}>
-          {/* Left - Mode Title (FB Lite style) */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <View style={{
-              width: isPhone ? 40 : 46,
-              height: isPhone ? 40 : 46,
-              borderRadius: 12,
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              alignItems: 'center',
-              justifyContent: 'center',
+          {/* Left - Traffic Lights + Title */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {/* macOS Traffic Light Buttons - exact style */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ 
+                width: 12, height: 12, borderRadius: 6, 
+                backgroundColor: '#FF5F57',
+                borderWidth: 0.5, 
+                borderColor: '#E2463F',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 0.5 },
+                shadowOpacity: 0.15,
+                shadowRadius: 0.5,
+              }} />
+              <View style={{ 
+                width: 12, height: 12, borderRadius: 6, 
+                backgroundColor: '#FFBD2E',
+                borderWidth: 0.5, 
+                borderColor: '#DFA123',
+              }} />
+              <View style={{ 
+                width: 12, height: 12, borderRadius: 6, 
+                backgroundColor: '#28C840',
+                borderWidth: 0.5, 
+                borderColor: '#1EAB2F',
+              }} />
+            </View>
+            
+            {/* App Title - macOS centered title style */}
+            <Text style={{ 
+              fontSize: 13, 
+              fontWeight: '600', 
+              color: '#4D4D4D',
+              textShadowColor: 'rgba(255,255,255,0.5)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 0,
             }}>
-              <Coffee size={isPhone ? 22 : 26} color="#FFFFFF" />
-            </View>
-            <View>
-              <Text style={{ 
-                fontSize: isPhone ? 18 : 22, 
-                fontWeight: '700', 
-                color: '#FFFFFF',
-              }}>
-                {modeConfig.title}
-              </Text>
-              <Text style={{ 
-                fontSize: isPhone ? 11 : 12, 
-                color: 'rgba(255,255,255,0.85)',
-                fontWeight: '500',
-              }}>
-                {user?.name || 'Utilisateur'}
-              </Text>
-            </View>
+              CaissaPro — {user?.name || 'Utilisateur'}
+            </Text>
           </View>
           
-          {/* Right - Action Icons (FB Lite style - bigger, translucent) */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {/* Session / Caisse Open-Close */}
+          {/* Right - macOS Toolbar Buttons */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {/* Session Button - macOS push button */}
             <TouchableOpacity
               onPress={() => setShowSessionModal(true)}
               style={{ 
-                width: 42, 
-                height: 42, 
-                borderRadius: 21, 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                backgroundColor: currentSession ? 'rgba(49,162,76,0.4)' : 'rgba(255,255,255,0.2)',
-                borderWidth: currentSession ? 2 : 0,
-                borderColor: '#FFFFFF',
+                paddingHorizontal: 14,
+                paddingVertical: 4,
+                borderRadius: 4,
+                backgroundColor: currentSession ? '#5CB85C' : '#FAFAFA',
+                borderWidth: 1,
+                borderColor: currentSession ? '#4CAE4C' : '#B0B0B0',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 0.5 },
+                shadowOpacity: 0.1,
+                shadowRadius: 0.5,
               }}
             >
-              {currentSession ? (
-                <Lock size={22} color="#FFFFFF" />
-              ) : (
-                <Inbox size={22} color="rgba(255,255,255,0.8)" />
-              )}
+              <Text style={{ 
+                fontSize: 12, 
+                color: currentSession ? '#FFFFFF' : '#333333', 
+                fontWeight: '400' 
+              }}>
+                {currentSession ? '✓ Caisse Ouverte' : 'Ouvrir Caisse'}
+              </Text>
             </TouchableOpacity>
             
-            {/* Stock */}
+            {/* Stock - macOS icon button */}
             {hasPermission(user?.role as UserRole, 'view_stock') && (
               <TouchableOpacity
                 onPress={() => setShowStockModal(true)}
                 style={{ 
-                  width: 42, 
-                  height: 42, 
-                  borderRadius: 21, 
+                  width: 28, 
+                  height: 22, 
+                  borderRadius: 4, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  backgroundColor: '#FAFAFA',
+                  borderWidth: 1,
+                  borderColor: '#B0B0B0',
                   position: 'relative',
                 }}
               >
-                <Package size={24} color="#FFFFFF" />
+                <Package size={14} color="#4D4D4D" />
                 {lowStockProducts.length > 0 && (
                   <View style={{
                     position: 'absolute',
-                    top: -3,
-                    right: -3,
-                    minWidth: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: '#FA383E',
+                    top: -5,
+                    right: -5,
+                    minWidth: 14,
+                    height: 14,
+                    borderRadius: 7,
+                    backgroundColor: '#FF3B30',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    paddingHorizontal: 5,
-                    borderWidth: 2,
-                    borderColor: modeConfig.color,
                   }}>
-                    <Text style={{ fontSize: 11, color: '#FFFFFF', fontWeight: '700' }}>
+                    <Text style={{ fontSize: 9, color: '#FFFFFF', fontWeight: '700' }}>
                       {lowStockProducts.length > 9 ? '9+' : lowStockProducts.length}
                     </Text>
                   </View>
@@ -1422,90 +1441,90 @@ export default function CashierSimpleScreen() {
               </TouchableOpacity>
             )}
             
-            {/* Expenses */}
+            {/* Expenses - macOS icon button */}
             {hasPermission(user?.role as UserRole, 'manage_expenses') && (
               <TouchableOpacity
                 onPress={() => setShowExpensesModal(true)}
                 style={{ 
-                  width: 42, 
-                  height: 42, 
-                  borderRadius: 21, 
+                  width: 28, 
+                  height: 22, 
+                  borderRadius: 4, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  backgroundColor: '#FAFAFA',
+                  borderWidth: 1,
+                  borderColor: '#B0B0B0',
                 }}
               >
-                <Wallet size={24} color="#FFFFFF" />
+                <Wallet size={14} color="#4D4D4D" />
               </TouchableOpacity>
             )}
             
-            {/* Notifications */}
+            {/* Notifications - macOS icon button */}
             <TouchableOpacity
               onPress={() => setShowNotificationPanel(true)}
               style={{ 
-                width: 42, 
-                height: 42, 
-                borderRadius: 21, 
+                width: 28, 
+                height: 22, 
+                borderRadius: 4, 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                backgroundColor: 'rgba(255,255,255,0.2)',
+                backgroundColor: '#FAFAFA',
+                borderWidth: 1,
+                borderColor: '#B0B0B0',
                 position: 'relative',
               }}
             >
-              <Bell size={24} color="#FFFFFF" />
+              <Bell size={14} color="#4D4D4D" />
               {notifications.length > 0 && (
                 <View style={{
                   position: 'absolute',
-                  top: -3,
-                  right: -3,
-                  minWidth: 20,
-                  height: 20,
-                  borderRadius: 10,
-                  backgroundColor: '#FA383E',
+                  top: -5,
+                  right: -5,
+                  minWidth: 14,
+                  height: 14,
+                  borderRadius: 7,
+                  backgroundColor: '#FF3B30',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  paddingHorizontal: 5,
-                  borderWidth: 2,
-                  borderColor: modeConfig.color,
                 }}>
-                  <Text style={{ fontSize: 11, color: '#FFFFFF', fontWeight: '700' }}>
+                  <Text style={{ fontSize: 9, color: '#FFFFFF', fontWeight: '700' }}>
                     {notifications.length > 9 ? '9+' : notifications.length}
                   </Text>
                 </View>
               )}
             </TouchableOpacity>
             
-            {/* Orders */}
+            {/* Orders - macOS icon button */}
             {hasPermission(user?.role as UserRole, 'view_all_orders') && (
               <TouchableOpacity
                 onPress={() => setShowOrdersModal(true)}
                 style={{ 
-                  width: 42, 
-                  height: 42, 
-                  borderRadius: 21, 
+                  width: 28, 
+                  height: 22, 
+                  borderRadius: 4, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  backgroundColor: '#FAFAFA',
+                  borderWidth: 1,
+                  borderColor: '#B0B0B0',
                   position: 'relative',
                 }}
               >
-                <ClipboardList size={24} color="#FFFFFF" />
+                <ClipboardList size={14} color="#4D4D4D" />
                 {todayOrders.length > 0 && (
                   <View style={{
                     position: 'absolute',
-                    top: -3,
-                    right: -3,
-                    minWidth: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: '#FFFFFF',
+                    top: -5,
+                    right: -5,
+                    minWidth: 14,
+                    height: 14,
+                    borderRadius: 7,
+                    backgroundColor: '#007AFF',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    paddingHorizontal: 5,
-                    borderWidth: 2,
-                    borderColor: modeConfig.color,
                   }}>
-                    <Text style={{ fontSize: 11, color: modeConfig.color, fontWeight: '700' }}>
+                    <Text style={{ fontSize: 9, color: '#FFFFFF', fontWeight: '700' }}>
                       {todayOrders.length > 99 ? '99+' : todayOrders.length}
                     </Text>
                   </View>
@@ -1513,192 +1532,233 @@ export default function CashierSimpleScreen() {
               </TouchableOpacity>
             )}
             
-            {/* Report */}
+            {/* Report - macOS icon button */}
             {hasPermission(user?.role as UserRole, 'view_daily_report') && (
               <TouchableOpacity
                 onPress={() => setShowAnalyticsDashboard(true)}
                 style={{ 
-                  width: 42, 
-                  height: 42, 
-                  borderRadius: 21, 
+                  width: 28, 
+                  height: 22, 
+                  borderRadius: 4, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  backgroundColor: '#FAFAFA',
+                  borderWidth: 1,
+                  borderColor: '#B0B0B0',
                 }}
               >
-                <BarChart3 size={24} color="#FFFFFF" />
+                <BarChart3 size={14} color="#4D4D4D" />
               </TouchableOpacity>
             )}
             
-            {/* Settings */}
+            {/* Settings - macOS icon button */}
             {hasPermission(user?.role as UserRole, 'access_admin_panel') && (
               <TouchableOpacity
                 onPress={() => setShowAdminPanel(true)}
                 style={{ 
-                  width: 42, 
-                  height: 42, 
-                  borderRadius: 21, 
+                  width: 28, 
+                  height: 22, 
+                  borderRadius: 4, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  backgroundColor: '#FAFAFA',
+                  borderWidth: 1,
+                  borderColor: '#B0B0B0',
                 }}
               >
-                <Settings size={24} color="#FFFFFF" />
+                <Settings size={14} color="#4D4D4D" />
               </TouchableOpacity>
             )}
             
-            {/* Cash Drawer - Opens via printer */}
+            {/* Cash Drawer - macOS icon button */}
             {printerConnected && (
               <TouchableOpacity
                 onPress={handleOpenCashDrawer}
                 style={{ 
-                  width: 42, 
-                  height: 42, 
-                  borderRadius: 21, 
+                  width: 28, 
+                  height: 22, 
+                  borderRadius: 4, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: 'rgba(255,255,255,0.3)',
+                  backgroundColor: '#FAFAFA',
+                  borderWidth: 1,
+                  borderColor: '#B0B0B0',
                 }}
               >
-                <Inbox size={24} color="#FFFFFF" />
+                <Inbox size={14} color="#4D4D4D" />
               </TouchableOpacity>
             )}
             
-            {/* Printer Status */}
+            {/* Printer Status - macOS style */}
             <TouchableOpacity
               onPress={() => setShowPrinterModal(true)}
               style={{ 
-                width: 42, 
-                height: 42, 
-                borderRadius: 21, 
+                width: 28, 
+                height: 22, 
+                borderRadius: 4, 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                backgroundColor: printerConnected ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.2)',
+                backgroundColor: printerConnected ? '#5CB85C' : '#FAFAFA',
+                borderWidth: 1,
+                borderColor: printerConnected ? '#4CAE4C' : '#B0B0B0',
               }}
             >
               {printerConnected ? (
-                <BluetoothConnected size={24} color="#FFFFFF" />
+                <BluetoothConnected size={14} color="#FFFFFF" />
               ) : (
-                <Bluetooth size={24} color="rgba(255,255,255,0.7)" />
+                <Bluetooth size={14} color="#888888" />
               )}
             </TouchableOpacity>
             
-            {/* Logout */}
+            {/* Logout - macOS push button */}
             <TouchableOpacity
               onPress={handleLogout}
               style={{ 
-                width: 42, 
-                height: 42, 
-                borderRadius: 21, 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                backgroundColor: 'rgba(255,255,255,0.2)',
+                paddingHorizontal: 14,
+                paddingVertical: 4,
+                borderRadius: 4,
+                backgroundColor: '#FAFAFA',
+                borderWidth: 1,
+                borderColor: '#B0B0B0',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 0.5 },
+                shadowOpacity: 0.1,
+                shadowRadius: 0.5,
               }}
             >
-              <LogOut size={24} color="#FFFFFF" />
+              <Text style={{ fontSize: 12, color: '#333333', fontWeight: '400' }}>Déconnexion</Text>
             </TouchableOpacity>
           </View>
         </View>
+      </LinearGradient>
         
-        {/* Stats Bar - White text on colored background */}
-        <View style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: spacing.md,
-          paddingTop: spacing.xs,
-        }}>
-          {/* Daily Stats */}
+      {/* Stats Bar - macOS style toolbar beneath header */}
+      <View style={{ 
+        flexDirection: 'row', 
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: '#E8E8E8',
+        borderBottomWidth: 1,
+        borderBottomColor: '#C0C0C0',
+      }}>
+        {/* Daily Stats */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
-              <Text style={{ 
-                fontSize: fontSize.xxl, 
-                fontWeight: '700', 
-                color: '#FFFFFF',
-              }}>
-                {Math.round(dailyStats.totalRevenue)} DH
-              </Text>
-              {todayExpenseTotal > 0 && (
-                <Text style={{ 
-                  fontSize: fontSize.sm, 
-                  fontWeight: '600', 
-                  color: 'rgba(255,255,255,0.85)',
-                  backgroundColor: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? 'rgba(255,255,255,0.2)' : 'rgba(250,56,62,0.3)',
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: 8,
-                }}>
-                  Net: {Math.round(dailyStats.totalRevenue - todayExpenseTotal)} DH
-                </Text>
-              )}
-            </View>
-            <Text style={{ fontSize: fontSize.xs, color: 'rgba(255,255,255,0.8)' }}>
-              {dailyStats.paidOrders} commandes • {todayExpenseTotal > 0 ? `${Math.round(todayExpenseTotal)} DH dépenses` : 'Aucune dépense'}
-              {lowStockProducts.length > 0 && ` • ⚠️ ${lowStockProducts.length} stock bas`}
+            <Text style={{ 
+              fontSize: 18, 
+              fontWeight: '600', 
+              color: '#333333',
+            }}>
+              {Math.round(dailyStats.totalRevenue)} DH
+            </Text>
+            <Text style={{ fontSize: 11, color: '#666666' }}>
+              {dailyStats.paidOrders} commandes
             </Text>
           </View>
+          {todayExpenseTotal > 0 && (
+            <View style={{ 
+              backgroundColor: '#FAFAFA',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 4,
+              borderWidth: 1,
+              borderColor: '#D0D0D0',
+            }}>
+              <Text style={{ fontSize: 11, fontWeight: '500', color: '#666666' }}>
+                Net: {Math.round(dailyStats.totalRevenue - todayExpenseTotal)} DH
+              </Text>
+            </View>
+          )}
+          {lowStockProducts.length > 0 && (
+            <View style={{ 
+              backgroundColor: '#FFF3CD',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 4,
+              borderWidth: 1,
+              borderColor: '#FFE69C',
+            }}>
+              <Text style={{ fontSize: 11, fontWeight: '500', color: '#856404' }}>
+                ⚠️ {lowStockProducts.length} stock bas
+              </Text>
+            </View>
+          )}
+          </View>
           
-          {/* Pending Orders Badge - Shows tables waiting for payment */}
+          {/* Pending Orders Badge - macOS button style */}
           {pendingOrders.length > 0 && (
             <TouchableOpacity
               onPress={() => setShowPendingModal(true)}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                backgroundColor: 'rgba(255,255,255,0.95)',
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                borderRadius: 20,
+                backgroundColor: '#FF9500',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 4,
                 gap: 6,
+                borderWidth: 1,
+                borderColor: '#E08600',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.3,
+                shadowRadius: 1,
               }}
             >
-              <Pause size={16} color={modeConfig.color} />
-              <Text style={{ fontSize: 14, color: modeConfig.color, fontWeight: '700' }}>
-                {pendingOrders.length} • T{[...new Set(pendingOrders.map(o => o.tableNumber || 0))].sort((a, b) => a - b).map(t => t === 0 ? '⌂' : t).join(',')}
+              <Pause size={14} color="#FFFFFF" />
+              <Text style={{ fontSize: 12, color: '#FFFFFF', fontWeight: '600' }}>
+                {pendingOrders.length} En attente
               </Text>
             </TouchableOpacity>
           )}
         </View>
-      </View>
 
-      {/* Table Selector Bar */}
+      {/* Table Selector Bar - macOS tab bar style */}
       <View style={{
         flexDirection: 'row',
-        backgroundColor: colors.white,
-        paddingVertical: spacing.sm,
+        backgroundColor: '#E8E8E8',
+        borderBottomWidth: 1,
+        borderBottomColor: '#B8B8B8',
+        paddingVertical: 8,
         paddingHorizontal: spacing.md,
         alignItems: 'center',
         gap: spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.borderLight,
       }}>
         <TouchableOpacity
           onPress={() => setShowTableModal(true)}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: selectedTable > 0 ? colors.primary : colors.background,
-            paddingHorizontal: spacing.lg,
-            paddingVertical: spacing.md,
-            borderRadius: borderRadius.full,
-            gap: spacing.sm,
+            backgroundColor: selectedTable > 0 ? '#007AFF' : '#FFFFFF',
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderRadius: 4,
+            gap: 6,
+            borderWidth: 1,
+            borderColor: selectedTable > 0 ? '#0066DD' : '#B8B8B8',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.1,
+            shadowRadius: 1,
           }}
         >
-          <Users size={18} color={selectedTable > 0 ? colors.white : colors.textSecondary} />
+          <Users size={16} color={selectedTable > 0 ? '#FFFFFF' : '#666666'} />
           <Text style={{ 
-            fontSize: fontSize.md, 
-            fontWeight: '600', 
-            color: selectedTable > 0 ? colors.white : colors.textPrimary 
+            fontSize: 13, 
+            fontWeight: '500', 
+            color: selectedTable > 0 ? '#FFFFFF' : '#333333',
           }}>
             {selectedTable === 0 ? 'Comptoir' : `Table ${selectedTable}`}
           </Text>
         </TouchableOpacity>
         
-        {/* Quick totals */}
+        {/* Quick totals - macOS labels */}
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
-            <Text style={{ fontSize: fontSize.sm, color: colors.success, fontWeight: '600' }}>Esp: {Math.round(dailyStats.cashRevenue)}</Text>
-            <Text style={{ fontSize: fontSize.sm, color: colors.primary, fontWeight: '600' }}>CB: {Math.round(dailyStats.cardRevenue)}</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Text style={{ fontSize: 12, color: '#4CD964', fontWeight: '600' }}>Esp: {Math.round(dailyStats.cashRevenue)} DH</Text>
+            <Text style={{ fontSize: 12, color: '#007AFF', fontWeight: '600' }}>CB: {Math.round(dailyStats.cardRevenue)} DH</Text>
           </View>
         </View>
       </View>
@@ -1706,74 +1766,92 @@ export default function CashierSimpleScreen() {
       <View style={{ flex: 1, flexDirection: isPhone ? 'column' : 'row' }}>
         {/* Products Section */}
         <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
-          {/* Search */}
+          {/* Search - macOS search field style */}
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: colors.white,
-            borderRadius: borderRadius.full,
-            paddingHorizontal: spacing.lg,
-            minHeight: isPhone ? 48 : 56,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 6,
+            paddingHorizontal: 12,
+            minHeight: isPhone ? 32 : 36,
             marginBottom: spacing.md,
+            borderWidth: 1,
+            borderColor: '#B8B8B8',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 1,
           }}>
-            <Search size={ui.iconSm} color={colors.textMuted} />
+            <Search size={14} color="#999999" />
             <TextInput
               style={{ 
                 flex: 1, 
-                paddingVertical: isPhone ? spacing.md : spacing.lg, 
-                paddingHorizontal: spacing.md, 
-                fontSize: ui.text.md, 
-                color: colors.textPrimary 
+                paddingVertical: 8, 
+                paddingHorizontal: 8, 
+                fontSize: 13, 
+                color: '#333333',
               }}
               placeholder="Rechercher..."
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor="#999999"
             />
             {searchQuery ? (
-              <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: spacing.md }}>
-                <X size={ui.iconSm} color={colors.textSecondary} />
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 6 }}>
+                <X size={14} color="#666666" />
               </TouchableOpacity>
             ) : null}
           </View>
 
-          {/* Categories - Compact Pills with count */}
+          {/* Categories - macOS segmented control style */}
           <View style={{ marginBottom: spacing.md }}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg }}
+              contentContainerStyle={{ gap: 0, paddingRight: spacing.lg }}
             >
+              {/* Segmented control container - macOS style */}
+              <View style={{
+                flexDirection: 'row',
+                backgroundColor: '#E0E0E0',
+                borderRadius: 6,
+                padding: 2,
+                borderWidth: 1,
+                borderColor: '#C8C8C8',
+              }}>
               <TouchableOpacity
                 onPress={() => setSelectedCategory('all')}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.md,
-                  borderRadius: borderRadius.full,
-                  backgroundColor: selectedCategory === 'all' ? colors.primary : colors.white,
-                  gap: spacing.sm,
-                  ...shadows.sm,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 4,
+                  backgroundColor: selectedCategory === 'all' ? '#FFFFFF' : 'transparent',
+                  shadowColor: selectedCategory === 'all' ? '#000' : 'transparent',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: selectedCategory === 'all' ? 0.15 : 0,
+                  shadowRadius: 1,
+                  gap: 4,
                 }}
               >
                 <Text style={{
-                  fontSize: fontSize.sm,
-                  fontWeight: '600',
-                  color: selectedCategory === 'all' ? colors.white : colors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: '500',
+                  color: selectedCategory === 'all' ? '#333333' : '#666666',
                 }}>
                   Tous
                 </Text>
                 <View style={{
-                  backgroundColor: selectedCategory === 'all' ? 'rgba(255,255,255,0.25)' : colors.background,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: 2,
-                  borderRadius: borderRadius.full,
+                  backgroundColor: selectedCategory === 'all' ? '#E8E8E8' : '#D0D0D0',
+                  paddingHorizontal: 5,
+                  paddingVertical: 1,
+                  borderRadius: 8,
                 }}>
                   <Text style={{ 
-                    fontSize: 11, 
-                    fontWeight: '700', 
-                    color: selectedCategory === 'all' ? colors.white : colors.textSecondary 
+                    fontSize: 10, 
+                    fontWeight: '600', 
+                    color: '#666666',
                   }}>
                     {products.filter(p => p.isActive).length}
                   </Text>
@@ -1788,31 +1866,34 @@ export default function CashierSimpleScreen() {
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      paddingHorizontal: spacing.lg,
-                      paddingVertical: spacing.md,
-                      borderRadius: borderRadius.full,
-                      backgroundColor: selectedCategory === cat.id ? colors.primary : colors.white,
-                      gap: spacing.sm,
-                      ...shadows.sm,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 4,
+                      backgroundColor: selectedCategory === cat.id ? '#FFFFFF' : 'transparent',
+                      shadowColor: selectedCategory === cat.id ? '#000' : 'transparent',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: selectedCategory === cat.id ? 0.15 : 0,
+                      shadowRadius: 1,
+                      gap: 4,
                     }}
                   >
                     <Text style={{
-                      fontSize: fontSize.sm,
-                      fontWeight: '600',
-                      color: selectedCategory === cat.id ? colors.white : colors.textPrimary,
+                      fontSize: 12,
+                      fontWeight: '500',
+                      color: selectedCategory === cat.id ? '#333333' : '#666666',
                     }}>
                       {cat.name}
                     </Text>
                     <View style={{
-                      backgroundColor: selectedCategory === cat.id ? 'rgba(255,255,255,0.25)' : colors.background,
-                      paddingHorizontal: spacing.sm,
-                      paddingVertical: 2,
-                      borderRadius: borderRadius.full,
+                      backgroundColor: selectedCategory === cat.id ? '#E8E8E8' : '#D0D0D0',
+                      paddingHorizontal: 5,
+                      paddingVertical: 1,
+                      borderRadius: 8,
                     }}>
                       <Text style={{ 
-                        fontSize: 11, 
-                        fontWeight: '700', 
-                        color: selectedCategory === cat.id ? colors.white : colors.textSecondary 
+                        fontSize: 10, 
+                        fontWeight: '600', 
+                        color: '#666666',
                       }}>
                         {catProductCount}
                       </Text>
@@ -1820,10 +1901,11 @@ export default function CashierSimpleScreen() {
                   </TouchableOpacity>
                 );
               })}
+              </View>
             </ScrollView>
           </View>
 
-          {/* Products Grid - Simple & Fast */}
+          {/* Products Grid - macOS card style */}
           <FlatList
             data={filteredProducts}
             key={`${numColumns}-${width}`}
@@ -1849,7 +1931,7 @@ export default function CashierSimpleScreen() {
               const hasStockTracking = item.stockQuantity !== undefined && item.stockQuantity >= 0;
               const isOutOfStock = hasStockTracking && item.stockQuantity === 0;
               const isLowStock = hasStockTracking && item.stockQuantity > 0 && item.stockQuantity <= (item.lowStockThreshold || 10);
-              const stockColor = isOutOfStock ? colors.error : isLowStock ? colors.warning : colors.success;
+              const stockColor = isOutOfStock ? '#FF3B30' : isLowStock ? '#FF9500' : '#4CD964';
               
               return (
                 <TouchableOpacity
@@ -1861,20 +1943,19 @@ export default function CashierSimpleScreen() {
                     height: ui.cardHeight,
                   }}
                 >
+                  {/* macOS-style card with subtle shadow */}
                   <View style={{
                     flex: 1,
-                    backgroundColor: colors.white,
-                    borderRadius: 12,
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 8,
                     overflow: 'hidden',
-                    // Subtle shadow for depth
+                    borderWidth: 1,
+                    borderColor: isLowStock ? '#FF9500' : '#C8C8C8',
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 8,
-                    elevation: 3,
-                    // Low stock border
-                    borderWidth: isLowStock ? 2 : 0,
-                    borderColor: isLowStock ? colors.warning : 'transparent',
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
                   }}>
                     {/* Product Image Area - 65% of card */}
                     <View style={{ 
@@ -1933,7 +2014,11 @@ export default function CashierSimpleScreen() {
                       {/* Out of Stock Overlay */}
                       {isOutOfStock && (
                         <View style={{
-                          ...StyleSheet.absoluteFillObject,
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
                           backgroundColor: 'rgba(0,0,0,0.5)',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -4533,16 +4618,16 @@ export default function CashierSimpleScreen() {
                 <View style={{ flexDirection: 'row', gap: isPhone ? 8 : 10 }}>
                   {EXPENSE_CATEGORIES.map((cat) => (
                     <TouchableOpacity
-                      key={cat}
+                      key={cat.id}
                       onPress={() => setExpenseCategory(cat)}
                       style={{
                         paddingHorizontal: isPhone ? 12 : 16,
                         paddingVertical: isPhone ? 8 : 10,
                         minHeight: isPhone ? 40 : 48,
                         borderRadius: 20,
-                        backgroundColor: expenseCategory === cat ? colors.primary : colors.background,
+                        backgroundColor: expenseCategory.id === cat.id ? colors.primary : colors.background,
                         borderWidth: 1,
-                        borderColor: expenseCategory === cat ? colors.primary : colors.borderLight,
+                        borderColor: expenseCategory.id === cat.id ? colors.primary : colors.borderLight,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
@@ -4550,9 +4635,9 @@ export default function CashierSimpleScreen() {
                       <Text style={{ 
                         fontSize: ui.text.sm, 
                         fontWeight: '500', 
-                        color: expenseCategory === cat ? colors.white : colors.textPrimary 
+                        color: expenseCategory.id === cat.id ? colors.white : colors.textPrimary 
                       }}>
-                        {cat}
+                        {cat.label}
                       </Text>
                     </TouchableOpacity>
                   ))}

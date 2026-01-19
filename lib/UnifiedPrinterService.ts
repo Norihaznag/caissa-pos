@@ -74,6 +74,7 @@ export interface TestPrintResult {
   message: string;
   duration: number;
   printerType: PrinterType;
+  bytesWritten?: number;
 }
 
 // ============================================================================
