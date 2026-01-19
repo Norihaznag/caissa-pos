@@ -1205,21 +1205,45 @@ export default function CashierSimpleScreen() {
     );
   }
 
+  // Mode-specific header colors (FB Lite style)
+  const modeConfig = useMemo(() => {
+    const role = user?.role || 'cashier';
+    switch (role) {
+      case 'admin':
+        return {
+          color: '#1877F2', // FB Blue
+          title: '⚙️ Mode Admin',
+          subtitle: 'Configuration & Paramètres',
+        };
+      case 'waiter':
+        return {
+          color: '#F5793B', // Orange
+          title: '🍽️ Mode Serveur',
+          subtitle: 'Prise de commandes',
+        };
+      case 'cashier':
+      default:
+        return {
+          color: '#31A24C', // Green
+          title: '💰 Mode Caisse',
+          subtitle: 'Ventes & Encaissements',
+        };
+    }
+  }, [user?.role]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header - Facebook Lite Style (Clean White) */}
+      {/* Header - Facebook Lite Style with Mode Color */}
       <View style={{ 
-        backgroundColor: '#FFFFFF',
+        backgroundColor: modeConfig.color,
         paddingBottom: spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E4E6EB',
-        elevation: 2,
+        elevation: 4,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
       }}>
-        {/* Top Row - Logo and Actions */}
+        {/* Top Row - Mode Title and Actions */}
         <View style={{ 
           flexDirection: 'row', 
           alignItems: 'center', 
@@ -1228,58 +1252,69 @@ export default function CashierSimpleScreen() {
           paddingTop: spacing.sm,
           paddingBottom: spacing.xs,
         }}>
-          {/* Left - Logo & Brand */}
+          {/* Left - Mode Title (FB Lite style) */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
             <View style={{
-              width: isPhone ? 36 : 42,
-              height: isPhone ? 36 : 42,
-              borderRadius: 10,
-              backgroundColor: colors.primary,
+              width: isPhone ? 40 : 46,
+              height: isPhone ? 40 : 46,
+              borderRadius: 12,
+              backgroundColor: 'rgba(255,255,255,0.2)',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <Coffee size={isPhone ? 20 : 24} color="#FFFFFF" />
+              <Coffee size={isPhone ? 22 : 26} color="#FFFFFF" />
             </View>
-            <Text style={{ 
-              fontSize: isPhone ? 20 : 24, 
-              fontWeight: '700', 
-              color: colors.primary,
-            }}>
-              CaissaPro
-            </Text>
+            <View>
+              <Text style={{ 
+                fontSize: isPhone ? 18 : 22, 
+                fontWeight: '700', 
+                color: '#FFFFFF',
+              }}>
+                {modeConfig.title}
+              </Text>
+              <Text style={{ 
+                fontSize: isPhone ? 11 : 12, 
+                color: 'rgba(255,255,255,0.85)',
+                fontWeight: '500',
+              }}>
+                {user?.name || 'Utilisateur'}
+              </Text>
+            </View>
           </View>
           
-          {/* Right - Action Icons */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {/* Right - Action Icons (FB Lite style - bigger, translucent) */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {/* Stock */}
             {hasPermission(user?.role as UserRole, 'view_stock') && (
               <TouchableOpacity
                 onPress={() => setShowStockModal(true)}
                 style={{ 
-                  width: 36, 
-                  height: 36, 
-                  borderRadius: 18, 
+                  width: 42, 
+                  height: 42, 
+                  borderRadius: 21, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: '#F0F2F5',
+                  backgroundColor: 'rgba(255,255,255,0.2)',
                   position: 'relative',
                 }}
               >
-                <Package size={20} color="#1C1E21" />
+                <Package size={24} color="#FFFFFF" />
                 {lowStockProducts.length > 0 && (
                   <View style={{
                     position: 'absolute',
-                    top: -2,
-                    right: -2,
-                    minWidth: 18,
-                    height: 18,
-                    borderRadius: 9,
+                    top: -3,
+                    right: -3,
+                    minWidth: 20,
+                    height: 20,
+                    borderRadius: 10,
                     backgroundColor: '#FA383E',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    paddingHorizontal: 4,
+                    paddingHorizontal: 5,
+                    borderWidth: 2,
+                    borderColor: modeConfig.color,
                   }}>
-                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '700' }}>
+                    <Text style={{ fontSize: 11, color: '#FFFFFF', fontWeight: '700' }}>
                       {lowStockProducts.length > 9 ? '9+' : lowStockProducts.length}
                     </Text>
                   </View>
@@ -1292,15 +1327,15 @@ export default function CashierSimpleScreen() {
               <TouchableOpacity
                 onPress={() => setShowExpensesModal(true)}
                 style={{ 
-                  width: 36, 
-                  height: 36, 
-                  borderRadius: 18, 
+                  width: 42, 
+                  height: 42, 
+                  borderRadius: 21, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: '#F0F2F5',
+                  backgroundColor: 'rgba(255,255,255,0.2)',
                 }}
               >
-                <Wallet size={20} color="#1C1E21" />
+                <Wallet size={24} color="#FFFFFF" />
               </TouchableOpacity>
             )}
             
@@ -1308,30 +1343,32 @@ export default function CashierSimpleScreen() {
             <TouchableOpacity
               onPress={() => setShowNotificationPanel(true)}
               style={{ 
-                width: 36, 
-                height: 36, 
-                borderRadius: 18, 
+                width: 42, 
+                height: 42, 
+                borderRadius: 21, 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                backgroundColor: '#F0F2F5',
+                backgroundColor: 'rgba(255,255,255,0.2)',
                 position: 'relative',
               }}
             >
-              <Bell size={20} color="#1C1E21" />
+              <Bell size={24} color="#FFFFFF" />
               {notifications.length > 0 && (
                 <View style={{
                   position: 'absolute',
-                  top: -2,
-                  right: -2,
-                  minWidth: 18,
-                  height: 18,
-                  borderRadius: 9,
+                  top: -3,
+                  right: -3,
+                  minWidth: 20,
+                  height: 20,
+                  borderRadius: 10,
                   backgroundColor: '#FA383E',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  paddingHorizontal: 4,
+                  paddingHorizontal: 5,
+                  borderWidth: 2,
+                  borderColor: modeConfig.color,
                 }}>
-                  <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '700' }}>
+                  <Text style={{ fontSize: 11, color: '#FFFFFF', fontWeight: '700' }}>
                     {notifications.length > 9 ? '9+' : notifications.length}
                   </Text>
                 </View>
@@ -1343,30 +1380,32 @@ export default function CashierSimpleScreen() {
               <TouchableOpacity
                 onPress={() => setShowOrdersModal(true)}
                 style={{ 
-                  width: 36, 
-                  height: 36, 
-                  borderRadius: 18, 
+                  width: 42, 
+                  height: 42, 
+                  borderRadius: 21, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: '#F0F2F5',
+                  backgroundColor: 'rgba(255,255,255,0.2)',
                   position: 'relative',
                 }}
               >
-                <ClipboardList size={20} color="#1C1E21" />
+                <ClipboardList size={24} color="#FFFFFF" />
                 {todayOrders.length > 0 && (
                   <View style={{
                     position: 'absolute',
-                    top: -2,
-                    right: -2,
-                    minWidth: 18,
-                    height: 18,
-                    borderRadius: 9,
-                    backgroundColor: '#31A24C',
+                    top: -3,
+                    right: -3,
+                    minWidth: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    backgroundColor: '#FFFFFF',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    paddingHorizontal: 4,
+                    paddingHorizontal: 5,
+                    borderWidth: 2,
+                    borderColor: modeConfig.color,
                   }}>
-                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '700' }}>
+                    <Text style={{ fontSize: 11, color: modeConfig.color, fontWeight: '700' }}>
                       {todayOrders.length > 99 ? '99+' : todayOrders.length}
                     </Text>
                   </View>
@@ -1379,15 +1418,15 @@ export default function CashierSimpleScreen() {
               <TouchableOpacity
                 onPress={() => setShowAnalyticsDashboard(true)}
                 style={{ 
-                  width: 36, 
-                  height: 36, 
-                  borderRadius: 18, 
+                  width: 42, 
+                  height: 42, 
+                  borderRadius: 21, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: '#F0F2F5',
+                  backgroundColor: 'rgba(255,255,255,0.2)',
                 }}
               >
-                <BarChart3 size={20} color="#1C1E21" />
+                <BarChart3 size={24} color="#FFFFFF" />
               </TouchableOpacity>
             )}
             
@@ -1396,15 +1435,15 @@ export default function CashierSimpleScreen() {
               <TouchableOpacity
                 onPress={() => setShowAdminPanel(true)}
                 style={{ 
-                  width: 36, 
-                  height: 36, 
-                  borderRadius: 18, 
+                  width: 42, 
+                  height: 42, 
+                  borderRadius: 21, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: '#F0F2F5',
+                  backgroundColor: 'rgba(255,255,255,0.2)',
                 }}
               >
-                <Settings size={20} color="#1C1E21" />
+                <Settings size={24} color="#FFFFFF" />
               </TouchableOpacity>
             )}
             
@@ -1413,15 +1452,15 @@ export default function CashierSimpleScreen() {
               <TouchableOpacity
                 onPress={handleOpenCashDrawer}
                 style={{ 
-                  width: 36, 
-                  height: 36, 
-                  borderRadius: 18, 
+                  width: 42, 
+                  height: 42, 
+                  borderRadius: 21, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  backgroundColor: '#FFF3E0',
+                  backgroundColor: 'rgba(255,255,255,0.3)',
                 }}
               >
-                <Inbox size={20} color="#E65100" />
+                <Inbox size={24} color="#FFFFFF" />
               </TouchableOpacity>
             )}
             
@@ -1429,18 +1468,18 @@ export default function CashierSimpleScreen() {
             <TouchableOpacity
               onPress={() => setShowPrinterModal(true)}
               style={{ 
-                width: 36, 
-                height: 36, 
-                borderRadius: 18, 
+                width: 42, 
+                height: 42, 
+                borderRadius: 21, 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                backgroundColor: printerConnected ? '#E7F3E9' : '#F0F2F5',
+                backgroundColor: printerConnected ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.2)',
               }}
             >
               {printerConnected ? (
-                <BluetoothConnected size={20} color="#31A24C" />
+                <BluetoothConnected size={24} color="#FFFFFF" />
               ) : (
-                <Bluetooth size={20} color="#1C1E21" />
+                <Bluetooth size={24} color="rgba(255,255,255,0.7)" />
               )}
             </TouchableOpacity>
             
@@ -1448,20 +1487,20 @@ export default function CashierSimpleScreen() {
             <TouchableOpacity
               onPress={handleLogout}
               style={{ 
-                width: 36, 
-                height: 36, 
-                borderRadius: 18, 
+                width: 42, 
+                height: 42, 
+                borderRadius: 21, 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                backgroundColor: '#FFEBE9',
+                backgroundColor: 'rgba(255,255,255,0.2)',
               }}
             >
-              <LogOut size={20} color="#FA383E" />
+              <LogOut size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
         
-        {/* Stats Bar - Clean Minimal */}
+        {/* Stats Bar - White text on colored background */}
         <View style={{ 
           flexDirection: 'row', 
           alignItems: 'center',
@@ -1475,7 +1514,7 @@ export default function CashierSimpleScreen() {
               <Text style={{ 
                 fontSize: fontSize.xxl, 
                 fontWeight: '700', 
-                color: '#1C1E21',
+                color: '#FFFFFF',
               }}>
                 {Math.round(dailyStats.totalRevenue)} DH
               </Text>
@@ -1483,13 +1522,17 @@ export default function CashierSimpleScreen() {
                 <Text style={{ 
                   fontSize: fontSize.sm, 
                   fontWeight: '600', 
-                  color: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? '#31A24C' : '#FA383E',
+                  color: 'rgba(255,255,255,0.85)',
+                  backgroundColor: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? 'rgba(255,255,255,0.2)' : 'rgba(250,56,62,0.3)',
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 8,
                 }}>
                   Net: {Math.round(dailyStats.totalRevenue - todayExpenseTotal)} DH
                 </Text>
               )}
             </View>
-            <Text style={{ fontSize: fontSize.xs, color: '#65676B' }}>
+            <Text style={{ fontSize: fontSize.xs, color: 'rgba(255,255,255,0.8)' }}>
               {dailyStats.paidOrders} commandes • {todayExpenseTotal > 0 ? `${Math.round(todayExpenseTotal)} DH dépenses` : 'Aucune dépense'}
               {lowStockProducts.length > 0 && ` • ⚠️ ${lowStockProducts.length} stock bas`}
             </Text>
@@ -1502,15 +1545,15 @@ export default function CashierSimpleScreen() {
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                backgroundColor: '#FFF4E5',
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 16,
+                backgroundColor: 'rgba(255,255,255,0.95)',
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 20,
                 gap: 6,
               }}
             >
-              <Pause size={14} color="#E8851F" />
-              <Text style={{ fontSize: 13, color: '#E8851F', fontWeight: '600' }}>
+              <Pause size={16} color={modeConfig.color} />
+              <Text style={{ fontSize: 14, color: modeConfig.color, fontWeight: '700' }}>
                 {pendingOrders.length} • T{[...new Set(pendingOrders.map(o => o.tableNumber || 0))].sort((a, b) => a - b).map(t => t === 0 ? '⌂' : t).join(',')}
               </Text>
             </TouchableOpacity>
