@@ -70,7 +70,7 @@ import {
 } from '../lib/printing';
 import { PrinterService, type PrinterState, type PrinterDevice } from '../lib/services/PrinterService';
 import UnifiedPrinterModal from './UnifiedPrinterModal';
-import StaffManagement from './StaffManagement';
+// StaffManagement removed - shifts feature disabled
 
 interface AdminPanelProps {
   visible: boolean;
@@ -178,7 +178,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
   
   // Receipt Design
   const [showReceiptDesignModal, setShowReceiptDesignModal] = useState(false);
-  const [showStaffManagement, setShowStaffManagement] = useState(false);
+  // Staff management removed
   const [receiptDesign, setReceiptDesign] = useState<ReceiptDesign>({
     showLogo: false,
     restaurantName: 'CaissaPro',
@@ -632,6 +632,12 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
       return;
     }
 
+    // Validate PIN is numeric only
+    if (!/^\d+$/.test(userPin)) {
+      Alert.alert('Erreur', 'Le PIN doit contenir uniquement des chiffres');
+      return;
+    }
+
     // Check if PIN is taken
     const pinTaken = await offlineUserService.isPinTaken(userPin, editingUser?.id);
     if (pinTaken) {
@@ -828,24 +834,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Configuration</Text>
         </TouchableOpacity>
 
-        {/* Staff Management - v2.3 */}
-        <TouchableOpacity
-          onPress={() => setShowStaffManagement(true)}
-          style={{
-            width: isTablet ? 180 : '47%',
-            alignItems: 'center',
-            backgroundColor: colors.white,
-            padding: spacing.xl,
-            borderRadius: borderRadius.lg,
-            ...shadows.sm,
-          }}
-        >
-          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
-            <Users size={28} color="#16A34A" />
-          </View>
-          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>👥 Équipe</Text>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Shifts & Salaires</Text>
-        </TouchableOpacity>
+        {/* Staff Management removed */}
       </View>
     </View>
   );
@@ -2584,11 +2573,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           </View>
         </Modal>
 
-        {/* Staff Management Modal - v2.3 */}
-        <StaffManagement
-          visible={showStaffManagement}
-          onClose={() => setShowStaffManagement(false)}
-        />
+        {/* Staff Management removed */}
       </View>
     </Modal>
   );

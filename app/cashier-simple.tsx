@@ -242,6 +242,7 @@ export default function CashierSimpleScreen() {
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
   const [amountReceived, setAmountReceived] = useState('');
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
   
   // Stats
   const [dailyStats, setDailyStats] = useState({
@@ -768,7 +769,11 @@ export default function CashierSimpleScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {}
       
-      clearCart();
+      // Reset cart state directly (don't use clearCart which has confirmation)
+      setCart([]);
+      setSelectedTable(0);
+      setCurrentOrderId(null);
+      
       await loadPendingOrders();
       await loadTodayOrders();
       
@@ -823,6 +828,19 @@ export default function CashierSimpleScreen() {
   // Print receipt
   const handlePrintReceipt = async (order: OfflineOrder): Promise<boolean> => {
     console.log('[PRINT_RECEIPT] Starting for order:', order.id);
+    
+    // P0 FIX: Block printing empty orders
+    if (!order.items || order.items.length === 0) {
+      Alert.alert('Erreur', 'Impossible d\'imprimer un reçu sans articles.');
+      return false;
+    }
+    
+    // P0 FIX: Block printing zero-amount orders
+    if (order.totalAmount <= 0) {
+      Alert.alert('Erreur', 'Impossible d\'imprimer un reçu avec un montant de 0 DH.');
+      return false;
+    }
+    
     setPrinting(true);
     try {
       // Initialize PrinterService and check connection
@@ -943,8 +961,20 @@ export default function CashierSimpleScreen() {
 
   // Payment
   const handlePayment = async () => {
+    // P0 FIX: Prevent double-click payment
+    if (paymentProcessing) {
+      console.log('[PAYMENT] Blocked - already processing');
+      return;
+    }
+    
     if (cart.length === 0) {
       Alert.alert('Panier vide', 'Ajoutez des produits avant de payer');
+      return;
+    }
+    
+    // P0 FIX: Block zero-amount orders
+    if (total <= 0) {
+      Alert.alert('Montant invalide', 'Le total doit être supérieur à 0 DH');
       return;
     }
     
@@ -955,6 +985,9 @@ export default function CashierSimpleScreen() {
       Alert.alert('Montant insuffisant', `Reçu: ${received.toFixed(0)} DH < Total: ${total.toFixed(0)} DH`);
       return;
     }
+    
+    // Lock payment processing
+    setPaymentProcessing(true);
     
     try {
       // Validate stock before payment
@@ -1087,6 +1120,9 @@ export default function CashierSimpleScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } catch {}
       Alert.alert('Erreur', 'Erreur lors du paiement');
+    } finally {
+      // P0 FIX: Always unlock payment processing
+      setPaymentProcessing(false);
     }
   };
 
@@ -1459,7 +1495,7 @@ export default function CashierSimpleScreen() {
             </Text>
           </View>
           
-          {/* Pending Orders Badge */}
+          {/* Pending Orders Badge - Shows tables waiting for payment */}
           {pendingOrders.length > 0 && (
             <TouchableOpacity
               onPress={() => setShowPendingModal(true)}
@@ -1475,7 +1511,7 @@ export default function CashierSimpleScreen() {
             >
               <Pause size={14} color="#E8851F" />
               <Text style={{ fontSize: 13, color: '#E8851F', fontWeight: '600' }}>
-                {pendingOrders.length} en attente
+                {pendingOrders.length} • T{[...new Set(pendingOrders.map(o => o.tableNumber || 0))].sort((a, b) => a - b).map(t => t === 0 ? '⌂' : t).join(',')}
               </Text>
             </TouchableOpacity>
           )}
@@ -2030,13 +2066,17 @@ export default function CashierSimpleScreen() {
               {/* Quick Pay & Hold Row */}
               <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.md }}>
                 {/* Quick Exact Cash - One tap payment */}
-                {cart.length > 0 && (
+                {cart.length > 0 && !paymentProcessing && (
                   <TouchableOpacity
-                    onPress={() => {
+                    onPress={async () => {
+                      if (paymentProcessing || cart.length === 0 || total <= 0) return;
+                      // Set payment method and amount first, then process
                       setPaymentMethod('cash');
                       setAmountReceived(total.toString());
-                      handlePayment();
+                      // Use setTimeout to ensure state is updated before payment
+                      setTimeout(() => handlePayment(), 50);
                     }}
+                    disabled={paymentProcessing}
                     style={{
                       flex: 1,
                       flexDirection: 'row',
@@ -2051,7 +2091,7 @@ export default function CashierSimpleScreen() {
                     }}
                   >
                     <Check size={18} color={colors.success} />
-                    <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.success }}>Exact</Text>
+                    <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.success }}>Exact {total.toFixed(0)}</Text>
                   </TouchableOpacity>
                 )}
                 
@@ -2446,7 +2486,7 @@ export default function CashierSimpleScreen() {
               }}>
                 <Text style={{ fontSize: 14, color: '#6B7280', marginBottom: 8 }}>💰 À payer</Text>
                 <Text style={{ fontSize: 40, fontWeight: '700', color: '#111827' }}>
-                  {Math.round(total)} MAD
+                  {Math.round(total)} DH
                 </Text>
               </View>
 
@@ -2527,26 +2567,32 @@ export default function CashierSimpleScreen() {
                     }}>
                       <Text style={{ fontSize: 14, color: '#92400E' }}>Monnaie à rendre</Text>
                       <Text style={{ fontSize: 20, fontWeight: '700', color: '#92400E' }}>
-                        {change.toFixed(2)} MAD
+                        {change.toFixed(0)} DH
                       </Text>
                     </View>
                   )}
                 </>
               )}
 
-              {/* Confirm Button */}
+              {/* Confirm Button - P0 FIX: Added paymentProcessing guard */}
               <TouchableOpacity
                 onPress={handlePayment}
-                disabled={paymentMethod === 'cash' && received < total}
+                disabled={paymentProcessing || (paymentMethod === 'cash' && received < total)}
                 style={{
-                  backgroundColor: paymentMethod === 'cash' && received < total ? '#D1D5DB' : '#4F46E5',
+                  backgroundColor: paymentProcessing || (paymentMethod === 'cash' && received < total) ? '#D1D5DB' : '#4F46E5',
                   paddingVertical: 18,
                   borderRadius: 14,
                   alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
                 }}
               >
+                {paymentProcessing && (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                )}
                 <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF' }}>
-                  Confirmer le paiement
+                  {paymentProcessing ? 'Traitement...' : 'Confirmer le paiement'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -3534,7 +3580,7 @@ export default function CashierSimpleScreen() {
                       </View>
                     </View>
                     <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: '#92400E' }}>
-                      {Math.round(item.totalAmount)} MAD
+                      {Math.round(item.totalAmount)} DH
                     </Text>
                   </View>
                   
@@ -3555,22 +3601,46 @@ export default function CashierSimpleScreen() {
                   
                   {/* Action buttons */}
                   <View style={{ flexDirection: 'row', gap: isPhone ? 10 : 14, marginTop: isPhone ? 14 : 18 }}>
+                    {/* Payer maintenant - Quick pay for café flow */}
                     <TouchableOpacity
-                      onPress={() => recallOrder(item)}
+                      onPress={() => {
+                        recallOrder(item);
+                        setShowPendingModal(false);
+                        setPaymentMethod('cash');
+                        setAmountReceived(item.totalAmount.toString());
+                        setShowPaymentModal(true);
+                      }}
                       style={{
                         flex: 1,
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 10,
-                        backgroundColor: '#10B981',
+                        gap: 8,
+                        backgroundColor: '#4F46E5',
                         paddingVertical: isPhone ? 14 : 16,
                         minHeight: isPhone ? 48 : 56,
                         borderRadius: 14,
                       }}
                     >
-                      <Play size={ui.iconSm} color="#FFFFFF" />
-                      <Text style={{ fontSize: ui.text.md, fontWeight: '700', color: '#FFFFFF' }}>Reprendre</Text>
+                      <Banknote size={ui.iconSm} color="#FFFFFF" />
+                      <Text style={{ fontSize: ui.text.md, fontWeight: '700', color: '#FFFFFF' }}>Encaisser</Text>
+                    </TouchableOpacity>
+                    {/* Reprendre - Add more items */}
+                    <TouchableOpacity
+                      onPress={() => recallOrder(item)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        backgroundColor: '#10B981',
+                        paddingVertical: isPhone ? 14 : 16,
+                        paddingHorizontal: isPhone ? 16 : 20,
+                        minHeight: isPhone ? 48 : 56,
+                        borderRadius: 14,
+                      }}
+                    >
+                      <Plus size={ui.iconSm} color="#FFFFFF" />
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => cancelOrder(item.id)}

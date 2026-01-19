@@ -1,0 +1,48 @@
+{
+  "name": "caissapro-windows",
+  "version": "2.3.0",
+  "private": true,
+  "scripts": {
+    "start": "react-native start",
+    "windows": "npx @react-native-community/cli run-windows",
+    "windows:release": "react-native run-windows --release --arch x64",
+    "build:msix": "react-native run-windows --release --arch x64 --bundle",
+    "clean": "npx react-native-clean-project"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "@react-navigation/native": "^7.0.0",
+    "@react-navigation/native-stack": "^7.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-safe-area-context": "^4.14.0",
+    "react-native-screens": "^4.4.0",
+    "react-native-sqlite-storage": "^6.0.1",
+    "react-native-windows": "0.76.10",
+    "zustand": "^5.0.0",
+    "lucide-react-native": "^0.460.0",
+    "react-native-svg": "^15.8.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@babel/preset-env": "^7.25.0",
+    "@babel/runtime": "^7.25.0",
+    "@react-native/babel-preset": "0.76.9",
+    "@react-native/metro-config": "0.76.9",
+    "@react-native/typescript-config": "0.76.9",
+    "@types/react": "^18.3.0",
+    "metro-react-native-babel-preset": "^0.77.0",
+    "typescript": "~5.6.0",
+    "metro-config": "^0.81.5"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "react-native-windows": {
+    "init-windows": {
+      "name": "CaissaproWindows",
+      "namespace": "CaissaproWindows",
+      "template": "old/uwp-cpp-app"
+    }
+  }
+}

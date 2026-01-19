@@ -1587,6 +1587,14 @@ export const offlineUserService = {
   
   async delete(id: string): Promise<void> {
     const database = await getDatabase();
+    
+    // First, set user_id to NULL in related tables to avoid foreign key constraint errors
+    await database.runAsync('UPDATE orders SET user_id = NULL WHERE user_id = ?', [id]);
+    await database.runAsync('UPDATE register_sessions SET user_id = NULL WHERE user_id = ?', [id]);
+    await database.runAsync('UPDATE payroll SET user_id = NULL WHERE user_id = ?', [id]);
+    await database.runAsync('UPDATE shifts SET user_id = NULL WHERE user_id = ?', [id]);
+    
+    // Now safely delete the user
     await database.runAsync('DELETE FROM users WHERE id = ?', [id]);
     await addToSyncQueue('users', id, 'DELETE', { id });
   },
