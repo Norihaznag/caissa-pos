@@ -67,6 +67,7 @@ import { hasPermission, type UserRole } from '../lib/permissions';
 import AdminPanel from '../components/AdminPanel';
 import UnifiedPrinterModal from '../components/UnifiedPrinterModal';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import { shiftService, Shift } from '../lib/shifts/shiftService';
 
 // Types
 interface CartItem {
@@ -252,6 +253,38 @@ export default function CashierSimpleScreen() {
     cashRevenue: 0,
     cardRevenue: 0,
   });
+  
+  // Session / Caisse (Open/Close)
+  const [currentSession, setCurrentSession] = useState<Shift | null>(null);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [sessionOpeningAmount, setSessionOpeningAmount] = useState('');
+  const [sessionClosingAmount, setSessionClosingAmount] = useState('');
+
+  // Mode-specific header colors (FB Lite style) - MUST be before any early returns
+  const modeConfig = useMemo(() => {
+    const role = user?.role || 'cashier';
+    switch (role) {
+      case 'admin':
+        return {
+          color: '#1877F2', // FB Blue
+          title: '⚙️ Mode Admin',
+          subtitle: 'Configuration & Paramètres',
+        };
+      case 'waiter':
+        return {
+          color: '#F5793B', // Orange
+          title: '🍽️ Mode Serveur',
+          subtitle: 'Prise de commandes',
+        };
+      case 'cashier':
+      default:
+        return {
+          color: '#31A24C', // Green
+          title: '💰 Mode Caisse',
+          subtitle: 'Ventes & Encaissements',
+        };
+    }
+  }, [user?.role]);
 
   // Allow auto-rotation based on user's device settings
   useEffect(() => {
@@ -286,6 +319,7 @@ export default function CashierSimpleScreen() {
         await loadLowStockProducts();
         await loadAllStockProducts();
         await loadTodayExpenses();
+        await loadCurrentSession();
         
         // Check printer connection status (try UnifiedPrinterService first, fallback to Bluetooth)
         const unifiedStatus = UnifiedPrinterService.getConnectionStatus();
@@ -580,6 +614,77 @@ export default function CashierSimpleScreen() {
           data: { total, count: expenses.length },
         }];
       });
+    }
+  };
+
+  // ========== SESSION / CAISSE MANAGEMENT ==========
+  const loadCurrentSession = async () => {
+    if (!user?.id) return;
+    try {
+      const session = await shiftService.getUserOpenShift(user.id);
+      setCurrentSession(session);
+    } catch (error) {
+      console.log('No open session found');
+      setCurrentSession(null);
+    }
+  };
+
+  const handleOpenSession = async () => {
+    if (!user?.id) return;
+    const amount = parseFloat(sessionOpeningAmount) || 0;
+    
+    try {
+      const session = await shiftService.openShift({
+        userId: user.id,
+        openingAmount: amount,
+        notes: `Ouvert par ${user.name}`,
+      });
+      setCurrentSession(session);
+      setSessionOpeningAmount('');
+      setShowSessionModal(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('✅ Caisse Ouverte', `Fond de caisse: ${amount.toFixed(0)} DH`);
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message || 'Impossible d\'ouvrir la caisse');
+    }
+  };
+
+  const handleCloseSession = async () => {
+    if (!currentSession?.id) return;
+    const closingAmount = parseFloat(sessionClosingAmount) || 0;
+    
+    try {
+      const closedSession = await shiftService.closeShift({
+        shiftId: currentSession.id,
+        closingAmount,
+        notes: `Fermé par ${user?.name}`,
+      });
+      
+      // Calculate expected cash
+      const expectedCash = (closedSession.openingAmount || 0) + (closedSession.cashSales || 0) - (closedSession.totalChangeGiven || 0) - todayExpenseTotal;
+      const difference = closingAmount - expectedCash;
+      
+      setCurrentSession(null);
+      setSessionClosingAmount('');
+      setShowSessionModal(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Show detailed closing report
+      Alert.alert(
+        '✅ Caisse Fermée',
+        `📊 RAPPORT DE CLÔTURE\n\n` +
+        `Fond ouverture: ${(closedSession.openingAmount || 0).toFixed(0)} DH\n` +
+        `Ventes espèces: ${(closedSession.cashSales || 0).toFixed(0)} DH\n` +
+        `Ventes carte: ${(closedSession.cardSales || 0).toFixed(0)} DH\n` +
+        `Dépenses: -${todayExpenseTotal.toFixed(0)} DH\n` +
+        `Monnaie rendue: -${(closedSession.totalChangeGiven || 0).toFixed(0)} DH\n\n` +
+        `💵 Attendu: ${expectedCash.toFixed(0)} DH\n` +
+        `💵 Compté: ${closingAmount.toFixed(0)} DH\n\n` +
+        `${difference >= 0 ? '✅' : '⚠️'} Écart: ${difference >= 0 ? '+' : ''}${difference.toFixed(0)} DH\n\n` +
+        `📦 ${closedSession.totalOrders || 0} commandes`
+      );
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message || 'Impossible de fermer la caisse');
     }
   };
 
@@ -1205,32 +1310,6 @@ export default function CashierSimpleScreen() {
     );
   }
 
-  // Mode-specific header colors (FB Lite style)
-  const modeConfig = useMemo(() => {
-    const role = user?.role || 'cashier';
-    switch (role) {
-      case 'admin':
-        return {
-          color: '#1877F2', // FB Blue
-          title: '⚙️ Mode Admin',
-          subtitle: 'Configuration & Paramètres',
-        };
-      case 'waiter':
-        return {
-          color: '#F5793B', // Orange
-          title: '🍽️ Mode Serveur',
-          subtitle: 'Prise de commandes',
-        };
-      case 'cashier':
-      default:
-        return {
-          color: '#31A24C', // Green
-          title: '💰 Mode Caisse',
-          subtitle: 'Ventes & Encaissements',
-        };
-    }
-  }, [user?.role]);
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header - Facebook Lite Style with Mode Color */}
@@ -1284,6 +1363,27 @@ export default function CashierSimpleScreen() {
           
           {/* Right - Action Icons (FB Lite style - bigger, translucent) */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {/* Session / Caisse Open-Close */}
+            <TouchableOpacity
+              onPress={() => setShowSessionModal(true)}
+              style={{ 
+                width: 42, 
+                height: 42, 
+                borderRadius: 21, 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                backgroundColor: currentSession ? 'rgba(49,162,76,0.4)' : 'rgba(255,255,255,0.2)',
+                borderWidth: currentSession ? 2 : 0,
+                borderColor: '#FFFFFF',
+              }}
+            >
+              {currentSession ? (
+                <Lock size={22} color="#FFFFFF" />
+              ) : (
+                <Inbox size={22} color="rgba(255,255,255,0.8)" />
+              )}
+            </TouchableOpacity>
+            
             {/* Stock */}
             {hasPermission(user?.role as UserRole, 'view_stock') && (
               <TouchableOpacity
@@ -4647,6 +4747,283 @@ export default function CashierSimpleScreen() {
             }
           />
         </View>
+      </Modal>
+
+      {/* Session / Caisse Modal */}
+      <Modal visible={showSessionModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSessionModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={{ flex: 1, backgroundColor: colors.background }}>
+            {/* Header */}
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              paddingVertical: isPhone ? 16 : 20,
+              paddingHorizontal: isPhone ? 16 : 24, 
+              backgroundColor: currentSession ? '#31A24C' : colors.primary, 
+              ...shadows.sm,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                {currentSession ? <Lock size={ui.iconMd} color="#FFFFFF" /> : <Inbox size={ui.iconMd} color="#FFFFFF" />}
+                <View>
+                  <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: '#FFFFFF' }}>
+                    {currentSession ? '🔓 Clôturer Caisse' : '🔐 Ouvrir Caisse'}
+                  </Text>
+                  <Text style={{ fontSize: ui.text.sm, color: 'rgba(255,255,255,0.85)' }}>
+                    {currentSession 
+                      ? `Ouverte depuis ${new Date(currentSession.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+                      : 'Aucune session active'
+                    }
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowSessionModal(false)}
+                style={{ 
+                  width: ui.iconBtn, 
+                  height: ui.iconBtn, 
+                  borderRadius: ui.iconBtn / 2, 
+                  backgroundColor: 'rgba(255,255,255,0.2)', 
+                  alignItems: 'center', 
+                  justifyContent: 'center' 
+                }}
+              >
+                <X size={ui.iconSm} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Content */}
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: isPhone ? 16 : 24 }}>
+              {currentSession ? (
+                /* CLOSE SESSION VIEW */
+                <View>
+                  {/* Current Session Info */}
+                  <View style={{ 
+                    backgroundColor: '#E8F5E9', 
+                    borderRadius: 16, 
+                    padding: isPhone ? 16 : 20, 
+                    marginBottom: isPhone ? 16 : 20,
+                    borderLeftWidth: 4,
+                    borderLeftColor: '#31A24C',
+                  }}>
+                    <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: '#1B5E20', marginBottom: 12 }}>
+                      📊 Résumé de la Session
+                    </Text>
+                    
+                    <View style={{ gap: 8 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: ui.text.md, color: '#388E3C' }}>Fond d'ouverture:</Text>
+                        <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: '#1B5E20' }}>
+                          {(currentSession.openingAmount || 0).toFixed(0)} DH
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: ui.text.md, color: '#388E3C' }}>Ventes du jour:</Text>
+                        <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: '#1B5E20' }}>
+                          {Math.round(dailyStats.totalRevenue)} DH
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: ui.text.md, color: '#388E3C' }}>├─ Espèces:</Text>
+                        <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: '#1B5E20' }}>
+                          {Math.round(dailyStats.cashRevenue)} DH
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: ui.text.md, color: '#388E3C' }}>└─ Carte:</Text>
+                        <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: '#1B5E20' }}>
+                          {Math.round(dailyStats.cardRevenue)} DH
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: ui.text.md, color: colors.error }}>Dépenses:</Text>
+                        <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.error }}>
+                          -{Math.round(todayExpenseTotal)} DH
+                        </Text>
+                      </View>
+                      <View style={{ height: 1, backgroundColor: '#C8E6C9', marginVertical: 8 }} />
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: '#1B5E20' }}>💵 Attendu en caisse:</Text>
+                        <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: '#1B5E20' }}>
+                          {Math.round((currentSession.openingAmount || 0) + dailyStats.cashRevenue - todayExpenseTotal)} DH
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  {/* Closing Amount Input */}
+                  <View style={{ 
+                    backgroundColor: colors.white, 
+                    borderRadius: 16, 
+                    padding: isPhone ? 16 : 20, 
+                    ...shadows.sm 
+                  }}>
+                    <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: 16 }}>
+                      💵 Comptez votre caisse
+                    </Text>
+                    
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                      <TextInput
+                        style={{
+                          flex: 1,
+                          backgroundColor: colors.background,
+                          borderRadius: 12,
+                          padding: isPhone ? 16 : 20,
+                          fontSize: ui.text.xxl,
+                          fontWeight: '700',
+                          color: colors.textPrimary,
+                          borderWidth: 2,
+                          borderColor: colors.primary,
+                          textAlign: 'center',
+                        }}
+                        value={sessionClosingAmount}
+                        onChangeText={setSessionClosingAmount}
+                        placeholder="0"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="decimal-pad"
+                      />
+                      <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: colors.textSecondary }}>DH</Text>
+                    </View>
+                    
+                    {/* Quick Amount Buttons */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {[500, 1000, 1500, 2000, 2500, 3000, 5000].map((amount) => (
+                          <TouchableOpacity
+                            key={amount}
+                            onPress={() => setSessionClosingAmount(amount.toString())}
+                            style={{
+                              paddingHorizontal: 16,
+                              paddingVertical: 10,
+                              borderRadius: 12,
+                              backgroundColor: sessionClosingAmount === amount.toString() ? colors.primary : colors.background,
+                              borderWidth: 1,
+                              borderColor: colors.borderLight,
+                            }}
+                          >
+                            <Text style={{ 
+                              fontSize: ui.text.md, 
+                              fontWeight: '600', 
+                              color: sessionClosingAmount === amount.toString() ? colors.white : colors.textPrimary 
+                            }}>
+                              {amount}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+                    
+                    <TouchableOpacity
+                      onPress={handleCloseSession}
+                      style={{
+                        backgroundColor: '#FA383E',
+                        paddingVertical: isPhone ? 16 : 20,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        gap: 10,
+                      }}
+                    >
+                      <Lock size={ui.iconSm} color={colors.white} />
+                      <Text style={{ color: colors.white, fontWeight: '700', fontSize: ui.text.lg }}>
+                        Clôturer la Caisse
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                /* OPEN SESSION VIEW */
+                <View style={{ 
+                  backgroundColor: colors.white, 
+                  borderRadius: 16, 
+                  padding: isPhone ? 16 : 24, 
+                  ...shadows.sm 
+                }}>
+                  <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: colors.textPrimary, marginBottom: 8, textAlign: 'center' }}>
+                    🔐 Ouvrir la Caisse
+                  </Text>
+                  <Text style={{ fontSize: ui.text.sm, color: colors.textSecondary, marginBottom: 24, textAlign: 'center' }}>
+                    Entrez le montant en caisse pour commencer la journée
+                  </Text>
+                  
+                  <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.textSecondary, marginBottom: 8 }}>
+                    Fond de caisse (DH)
+                  </Text>
+                  
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                    <TextInput
+                      style={{
+                        flex: 1,
+                        backgroundColor: colors.background,
+                        borderRadius: 12,
+                        padding: isPhone ? 16 : 20,
+                        fontSize: ui.text.xxl,
+                        fontWeight: '700',
+                        color: colors.textPrimary,
+                        borderWidth: 2,
+                        borderColor: colors.primary,
+                        textAlign: 'center',
+                      }}
+                      value={sessionOpeningAmount}
+                      onChangeText={setSessionOpeningAmount}
+                      placeholder="500"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="decimal-pad"
+                    />
+                    <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: colors.textSecondary }}>DH</Text>
+                  </View>
+                  
+                  {/* Quick Amount Buttons */}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+                    {[0, 200, 300, 500, 1000].map((amount) => (
+                      <TouchableOpacity
+                        key={amount}
+                        onPress={() => setSessionOpeningAmount(amount.toString())}
+                        style={{
+                          paddingHorizontal: 20,
+                          paddingVertical: 12,
+                          borderRadius: 12,
+                          backgroundColor: sessionOpeningAmount === amount.toString() ? colors.primary : colors.background,
+                          borderWidth: 1,
+                          borderColor: colors.borderLight,
+                          minWidth: 70,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ 
+                          fontSize: ui.text.md, 
+                          fontWeight: '600', 
+                          color: sessionOpeningAmount === amount.toString() ? colors.white : colors.textPrimary 
+                        }}>
+                          {amount === 0 ? '0' : amount}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  
+                  <TouchableOpacity
+                    onPress={handleOpenSession}
+                    style={{
+                      backgroundColor: '#31A24C',
+                      paddingVertical: isPhone ? 16 : 20,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <Inbox size={ui.iconSm} color={colors.white} />
+                    <Text style={{ color: colors.white, fontWeight: '700', fontSize: ui.text.lg }}>
+                      Ouvrir la Caisse
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

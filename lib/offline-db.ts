@@ -826,16 +826,16 @@ export interface Expense {
 }
 
 export const EXPENSE_CATEGORIES = [
-  'Fournitures',
-  'Ingrédients',
-  'Équipement',
-  'Salaires',
-  'Loyer',
-  'Électricité',
-  'Eau',
+  'Fournisseur',
+  'Marché / Courses',
+  'Lait & Café',
+  'Pain & Pâtisserie',
+  'Boissons',
+  'Réparation',
   'Nettoyage',
-  'Marketing',
-  'Transport',
+  'Avance Salaire',
+  'Loyer',
+  'Électricité / Eau',
   'Autre',
 ] as const;
 
