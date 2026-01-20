@@ -765,7 +765,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
       <View style={{ 
         flexDirection: 'row', 
         flexWrap: 'wrap', 
-        gap: spacing.md,
+        gap: 12,
         justifyContent: 'center',
       }}>
         <TouchableOpacity
@@ -773,17 +773,22 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           style={{
             width: isTablet ? 180 : '47%',
             alignItems: 'center',
-            backgroundColor: colors.white,
-            padding: spacing.xl,
-            borderRadius: borderRadius.lg,
-            ...shadows.sm,
+            backgroundColor: '#FFFFFF',
+            padding: 20,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: '#D0D0D0',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
           }}
         >
-          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
-            <Grid3x3 size={28} color={colors.primary} />
+          <View style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#E5F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <Grid3x3 size={24} color="#007AFF" />
           </View>
-          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Catégories</Text>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Organiser les produits</Text>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#1C1C1E', textAlign: 'center' }}>Catégories</Text>
+          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, textAlign: 'center' }}>Organiser les produits</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -791,17 +796,22 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           style={{
             width: isTablet ? 180 : '47%',
             alignItems: 'center',
-            backgroundColor: colors.white,
-            padding: spacing.xl,
-            borderRadius: borderRadius.lg,
-            ...shadows.sm,
+            backgroundColor: '#FFFFFF',
+            padding: 20,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: '#D0D0D0',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
           }}
         >
-          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: colors.successLight, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
-            <Package size={28} color={colors.success} />
+          <View style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#E8F8EB', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <Package size={24} color="#34C759" />
           </View>
-          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Produits</Text>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Ajouter et modifier</Text>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#1C1C1E', textAlign: 'center' }}>Produits</Text>
+          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, textAlign: 'center' }}>Ajouter et modifier</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -809,17 +819,22 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           style={{
             width: isTablet ? 180 : '47%',
             alignItems: 'center',
-            backgroundColor: colors.white,
-            padding: spacing.xl,
-            borderRadius: borderRadius.lg,
-            ...shadows.sm,
+            backgroundColor: '#FFFFFF',
+            padding: 20,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: '#D0D0D0',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
           }}
         >
-          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: colors.warningLight, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
-            <Users size={28} color={colors.warning} />
+          <View style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#FFF4E5', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <Users size={24} color="#FF9500" />
           </View>
-          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Utilisateurs</Text>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Gérer les accès</Text>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#1C1C1E', textAlign: 'center' }}>Utilisateurs</Text>
+          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, textAlign: 'center' }}>Gérer les accès</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -827,17 +842,22 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           style={{
             width: isTablet ? 180 : '47%',
             alignItems: 'center',
-            backgroundColor: colors.white,
-            padding: spacing.xl,
-            borderRadius: borderRadius.lg,
-            ...shadows.sm,
+            backgroundColor: '#FFFFFF',
+            padding: 20,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: '#D0D0D0',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
           }}
         >
-          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
-            <Coffee size={28} color="#9333EA" />
+          <View style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <Coffee size={24} color="#9333EA" />
           </View>
-          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Paramètres</Text>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Configuration</Text>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#1C1C1E', textAlign: 'center' }}>Paramètres</Text>
+          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, textAlign: 'center' }}>Configuration</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -845,17 +865,22 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           style={{
             width: isTablet ? 180 : '47%',
             alignItems: 'center',
-            backgroundColor: colors.white,
-            padding: spacing.xl,
-            borderRadius: borderRadius.lg,
-            ...shadows.sm,
+            backgroundColor: '#FFFFFF',
+            padding: 20,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: '#D0D0D0',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
           }}
         >
-          <View style={{ width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: '#FDF2F8', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }}>
-            <Palette size={28} color="#EC4899" />
+          <View style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#FDF2F8', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <Palette size={24} color="#EC4899" />
           </View>
-          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' }}>Apparence</Text>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>Thèmes & Couleurs</Text>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#1C1C1E', textAlign: 'center' }}>Apparence</Text>
+          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, textAlign: 'center' }}>Thèmes & Couleurs</Text>
         </TouchableOpacity>
 
         {/* Staff Management removed */}
@@ -884,15 +909,17 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           style={{ 
             flexDirection: 'row', 
             alignItems: 'center', 
-            backgroundColor: colors.primary, 
+            backgroundColor: '#007AFF', 
             paddingHorizontal: spacing.lg, 
-            paddingVertical: spacing.md, 
-            borderRadius: borderRadius.full, 
-            gap: spacing.xs 
+            paddingVertical: spacing.sm, 
+            borderRadius: 6, 
+            gap: spacing.xs,
+            borderWidth: 1,
+            borderColor: '#0066DD',
           }}
         >
-          <Plus size={18} color={colors.white} />
-          <Text style={{ color: colors.white, fontWeight: '600', fontSize: fontSize.sm }}>Ajouter</Text>
+          <Plus size={16} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontWeight: '500', fontSize: fontSize.sm }}>Ajouter</Text>
         </TouchableOpacity>
       </View>
 
@@ -986,15 +1013,17 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           style={{ 
             flexDirection: 'row', 
             alignItems: 'center', 
-            backgroundColor: colors.success, 
+            backgroundColor: '#34C759', 
             paddingHorizontal: spacing.lg, 
-            paddingVertical: spacing.md, 
-            borderRadius: borderRadius.full, 
-            gap: spacing.xs 
+            paddingVertical: spacing.sm, 
+            borderRadius: 6, 
+            gap: spacing.xs,
+            borderWidth: 1,
+            borderColor: '#2DB84D',
           }}
         >
-          <Plus size={18} color={colors.white} />
-          <Text style={{ color: colors.white, fontWeight: '600', fontSize: fontSize.sm }}>Ajouter</Text>
+          <Plus size={16} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontWeight: '500', fontSize: fontSize.sm }}>Ajouter</Text>
         </TouchableOpacity>
       </View>
 
@@ -1003,10 +1032,12 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
         <View style={{
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: colors.background,
-          borderRadius: borderRadius.full,
+          backgroundColor: '#F5F5F5',
+          borderRadius: 8,
           paddingHorizontal: spacing.md,
           gap: spacing.sm,
+          borderWidth: 1,
+          borderColor: '#D0D0D0',
         }}>
           <Search size={18} color={colors.textMuted} />
           <TextInput
@@ -1241,15 +1272,17 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           style={{ 
             flexDirection: 'row', 
             alignItems: 'center', 
-            backgroundColor: colors.warning, 
+            backgroundColor: '#FF9500', 
             paddingHorizontal: spacing.lg, 
-            paddingVertical: spacing.md, 
-            borderRadius: borderRadius.full, 
-            gap: spacing.xs 
+            paddingVertical: spacing.sm, 
+            borderRadius: 6, 
+            gap: spacing.xs,
+            borderWidth: 1,
+            borderColor: '#E68600',
           }}
         >
-          <Plus size={18} color={colors.white} />
-          <Text style={{ color: colors.white, fontWeight: '600', fontSize: fontSize.sm }}>Ajouter</Text>
+          <Plus size={16} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontWeight: '500', fontSize: fontSize.sm }}>Ajouter</Text>
         </TouchableOpacity>
       </View>
 
@@ -1266,7 +1299,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               alignItems: 'center',
               backgroundColor: '#FFFFFF',
               padding: 16,
-              borderRadius: 12,
+              borderRadius: 8,
               marginBottom: 12,
               shadowColor: '#000',
               shadowOffset: { width: 0, height: 1 },
@@ -1754,7 +1787,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        {/* Close button */}
+        {/* Close button - macOS style */}
         <View style={{ 
           flexDirection: 'row', 
           justifyContent: 'flex-end', 
@@ -1766,15 +1799,17 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
           <TouchableOpacity
             onPress={onClose}
             style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: colors.border,
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              backgroundColor: '#E8E8E8',
+              borderWidth: 1,
+              borderColor: '#C8C8C8',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <X size={20} color={colors.textSecondary} />
+            <X size={16} color="#666666" />
           </TouchableOpacity>
         </View>
 
@@ -1791,7 +1826,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               <TextInput
                 style={{
                   backgroundColor: '#F9FAFB',
-                  borderRadius: 12,
+                  borderRadius: 6,
                   padding: 16,
                   fontSize: 16,
                   color: '#111827',
@@ -1808,13 +1843,13 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <TouchableOpacity
                   onPress={() => setShowCategoryModal(false)}
-                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center' }}
+                  style={{ flex: 1, paddingVertical: 14, borderRadius: 6, backgroundColor: '#F3F4F6', alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 16, fontWeight: '600', color: '#6B7280' }}>Annuler</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={saveCategory}
-                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#4F46E5', alignItems: 'center' }}
+                  style={{ flex: 1, paddingVertical: 14, borderRadius: 6, backgroundColor: '#007AFF', alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Sauvegarder</Text>
                 </TouchableOpacity>
@@ -1831,7 +1866,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               contentContainerStyle={{ alignItems: 'center' }}
               showsVerticalScrollIndicator={false}
             >
-              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 }}>
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 8, padding: 24, width: '100%', maxWidth: 400 }}>
                 <Text style={{ fontSize: 20, fontWeight: '700', color: '#111827', marginBottom: 20 }}>
                   {editingProduct ? 'Modifier le produit' : 'Nouveau produit'}
                 </Text>
@@ -1893,8 +1928,10 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                         paddingHorizontal: spacing.md,
                         paddingVertical: spacing.sm,
                         backgroundColor: colors.primaryLight,
-                        borderRadius: borderRadius.full,
+                        borderRadius: 6,
                         gap: spacing.xs,
+                        borderWidth: 1,
+                        borderColor: '#D0E3FF',
                       }}
                     >
                       <ImageIcon size={16} color={colors.primary} />
@@ -1908,8 +1945,10 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                         paddingHorizontal: spacing.md,
                         paddingVertical: spacing.sm,
                         backgroundColor: colors.successLight,
-                        borderRadius: borderRadius.full,
+                        borderRadius: 6,
                         gap: spacing.xs,
+                        borderWidth: 1,
+                        borderColor: '#C6F0D2',
                       }}
                     >
                       <Camera size={16} color={colors.success} />
@@ -1921,7 +1960,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                 <TextInput
                   style={{
                     backgroundColor: '#F9FAFB',
-                    borderRadius: 12,
+                    borderRadius: 6,
                     padding: 16,
                     fontSize: 16,
                     color: '#111827',
@@ -1937,7 +1976,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                 <TextInput
                   style={{
                     backgroundColor: '#F9FAFB',
-                    borderRadius: 12,
+                    borderRadius: 6,
                     padding: 16,
                     fontSize: 16,
                     color: '#111827',
@@ -1962,8 +2001,8 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                         style={{
                           paddingHorizontal: 16,
                           paddingVertical: 10,
-                          borderRadius: 20,
-                          backgroundColor: productCategoryId === cat.id ? '#4F46E5' : '#F3F4F6',
+                          borderRadius: 6,
+                          backgroundColor: productCategoryId === cat.id ? '#007AFF' : '#F3F4F6',
                         }}
                       >
                         <Text style={{ color: productCategoryId === cat.id ? '#FFFFFF' : '#374151', fontWeight: '500' }}>
@@ -2003,7 +2042,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                 {/* Stock Management Section */}
                 <View style={{ 
                   backgroundColor: '#F9FAFB', 
-                  borderRadius: 12, 
+                  borderRadius: 8, 
                   padding: 16, 
                   marginBottom: 20,
                   borderWidth: 1,
@@ -2124,13 +2163,13 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <TouchableOpacity
                     onPress={() => setShowProductModal(false)}
-                    style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center' }}
+                    style={{ flex: 1, paddingVertical: 14, borderRadius: 6, backgroundColor: '#F3F4F6', alignItems: 'center' }}
                   >
                     <Text style={{ fontSize: 16, fontWeight: '600', color: '#6B7280' }}>Annuler</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={saveProduct}
-                    style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#10B981', alignItems: 'center' }}
+                    style={{ flex: 1, paddingVertical: 14, borderRadius: 6, backgroundColor: '#34C759', alignItems: 'center' }}
                   >
                     <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Sauvegarder</Text>
                   </TouchableOpacity>
@@ -2143,7 +2182,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
         {/* User Modal */}
         <Modal visible={showUserModal} transparent animationType="fade">
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 }}>
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 8, padding: 24, width: '100%', maxWidth: 400 }}>
               <Text style={{ fontSize: 20, fontWeight: '700', color: '#111827', marginBottom: 20 }}>
                 {editingUser ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}
               </Text>
@@ -2151,7 +2190,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               <TextInput
                 style={{
                   backgroundColor: '#F9FAFB',
-                  borderRadius: 12,
+                  borderRadius: 6,
                   padding: 16,
                   fontSize: 16,
                   color: '#111827',
@@ -2202,8 +2241,8 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
                     style={{
                       flex: 1,
                       paddingVertical: 12,
-                      borderRadius: 12,
-                      backgroundColor: userRole === role.value ? '#4F46E5' : role.color,
+                      borderRadius: 6,
+                      backgroundColor: userRole === role.value ? '#007AFF' : role.color,
                       alignItems: 'center',
                     }}
                   >
@@ -2221,13 +2260,13 @@ export default function AdminPanel({ visible, onClose, onDataChanged }: AdminPan
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <TouchableOpacity
                   onPress={() => setShowUserModal(false)}
-                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center' }}
+                  style={{ flex: 1, paddingVertical: 14, borderRadius: 6, backgroundColor: '#F3F4F6', alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 16, fontWeight: '600', color: '#6B7280' }}>Annuler</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={saveUser}
-                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F59E0B', alignItems: 'center' }}
+                  style={{ flex: 1, paddingVertical: 14, borderRadius: 6, backgroundColor: '#FF9500', alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Sauvegarder</Text>
                 </TouchableOpacity>

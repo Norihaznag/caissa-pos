@@ -642,7 +642,7 @@ export const PrinterTestScreen: React.FC<Props> = ({ visible = true, onClose }) 
           <View style={{ 
             backgroundColor: COLORS.primary + '15', 
             padding: 16, 
-            borderRadius: 12, 
+            borderRadius: 8, 
             marginTop: 20,
             width: '100%',
           }}>
@@ -899,7 +899,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.card,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
@@ -975,7 +975,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.card,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
     marginTop: 12,
     borderWidth: 1,
@@ -1041,7 +1041,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: COLORS.card,
-    borderRadius: 16,
+    borderRadius: 8,
     padding: 24,
     width: '100%',
     maxWidth: 400,

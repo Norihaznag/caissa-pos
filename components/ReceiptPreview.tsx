@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   },
   container: {
     backgroundColor: '#f5f5f5',
-    borderRadius: 12,
+    borderRadius: 8,
     width: '90%',
     maxWidth: 400,
     maxHeight: '80%',

@@ -447,7 +447,7 @@ export function UnifiedPrinterModal({
           alignItems: 'center',
           padding: spacing.lg,
           backgroundColor: isConnected ? colors.successLight : colors.white,
-          borderRadius: 12,
+          borderRadius: 8,
           marginBottom: spacing.sm,
           borderWidth: 1,
           borderColor: isConnected ? colors.success : colors.gray200,
@@ -457,7 +457,7 @@ export function UnifiedPrinterModal({
           style={{
             width: 48,
             height: 48,
-            borderRadius: 12,
+            borderRadius: 8,
             backgroundColor: typeColor + '20',
             alignItems: 'center',
             justifyContent: 'center',
@@ -536,7 +536,7 @@ export function UnifiedPrinterModal({
       style={{
         backgroundColor: colors.gray50,
         padding: spacing.lg,
-        borderRadius: 12,
+        borderRadius: 8,
         marginBottom: spacing.lg,
       }}
     >
@@ -635,7 +635,7 @@ export function UnifiedPrinterModal({
       style={{
         backgroundColor: colors.gray50,
         padding: spacing.lg,
-        borderRadius: 12,
+        borderRadius: 8,
         marginTop: spacing.lg,
       }}
     >
@@ -762,25 +762,48 @@ export function UnifiedPrinterModal({
         style={{ flex: 1, backgroundColor: colors.white }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Header */}
+        {/* Header - macOS Style */}
         <View
           style={{
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: spacing.lg,
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            backgroundColor: '#F5F5F5',
             borderBottomWidth: 1,
-            borderBottomColor: colors.gray200,
+            borderBottomColor: '#D0D0D0',
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-            <Printer size={24} color={colors.primary} />
-            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.gray800 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              backgroundColor: '#007AFF',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Printer size={16} color="#FFFFFF" />
+            </View>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: '#1C1C1E' }}>
               Imprimantes
             </Text>
           </View>
-          <TouchableOpacity onPress={onClose} style={{ padding: spacing.sm }}>
-            <X size={24} color={colors.gray500} />
+          <TouchableOpacity 
+            onPress={onClose} 
+            style={{ 
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              backgroundColor: '#E8E8E8',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: '#C8C8C8',
+            }}
+          >
+            <X size={18} color="#666666" />
           </TouchableOpacity>
         </View>
 
@@ -1036,7 +1059,7 @@ export function UnifiedPrinterModal({
               justifyContent: 'space-between',
               backgroundColor: colors.gray50,
               padding: spacing.lg,
-              borderRadius: 12,
+              borderRadius: 8,
               marginTop: spacing.lg,
             }}
           >

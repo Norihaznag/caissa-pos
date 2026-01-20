@@ -217,7 +217,7 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
                   {isSelected && (
                     <View style={{
                       backgroundColor: colors.success,
-                      borderRadius: borderRadius.full,
+                      borderRadius: 10,
                       padding: 2,
                     }}>
                       <Check size={12} color={colors.white} />
@@ -232,7 +232,7 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
                       backgroundColor: themeItem.colors.secondary,
                       paddingHorizontal: spacing.sm,
                       paddingVertical: 2,
-                      borderRadius: borderRadius.full,
+                      borderRadius: 10,
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: 4,

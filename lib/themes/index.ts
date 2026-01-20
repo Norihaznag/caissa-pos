@@ -78,42 +78,42 @@ export const defaultTheme: Theme = {
   id: 'default',
   name: 'macOS Classic',
   nameAr: 'ماك كلاسيك',
-  description: 'Authentic macOS design with charcoal header and Aqua buttons',
+  description: 'Authentic macOS design with light gray interface and blue accents',
   isDark: false,
   colors: {
     // macOS window background - exact match to System Preferences
     background: '#EDEDED',
     surface: '#F6F6F6',
     card: '#FFFFFF',
-    border: '#B3B3B3',
-    borderLight: '#CFCFCF',
+    border: '#B0B0B0',
+    borderLight: '#C8C8C8',
 
-    // Primary - macOS charcoal header color (from the title bar)
-    primary: '#535353',
-    primaryLight: '#E5E5E5',
-    primaryDark: '#3D3D3D',
+    // Primary - macOS Blue (Apple's system blue for buttons/actions)
+    primary: '#007AFF',
+    primaryLight: '#E5F1FF',
+    primaryDark: '#0066DD',
     primaryText: '#FFFFFF',
 
-    // Secondary - macOS button/panel gray
+    // Secondary - macOS panel/toolbar gray
     secondary: '#E8E8E8',
     secondaryLight: '#F5F5F5',
     secondaryText: '#333333',
 
     // Text - macOS system text colors
-    text: '#000000',
+    text: '#333333',
     textSecondary: '#666666',
     textMuted: '#999999',
     textInverse: '#FFFFFF',
 
     // Status colors - macOS system colors
-    success: '#4CD964',
+    success: '#34C759',
     successLight: '#E8F8EB',
     warning: '#FF9500',
     warningLight: '#FFF4E5',
     danger: '#FF3B30',
     dangerLight: '#FFE5E5',
-    info: '#007AFF',
-    infoLight: '#E5F1FF',
+    info: '#5AC8FA',
+    infoLight: '#E5F6FF',
 
     // Overlays - macOS sheet/modal style
     overlay: 'rgba(0, 0, 0, 0.4)',
@@ -121,7 +121,7 @@ export const defaultTheme: Theme = {
     white: '#FFFFFF',
   },
   preview: {
-    primary: '#535353',
+    primary: '#007AFF',
     secondary: '#E8E8E8',
     background: '#EDEDED',
   },

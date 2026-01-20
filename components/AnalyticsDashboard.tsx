@@ -151,24 +151,27 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        {/* Header */}
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#EDEDED' }}>
+        {/* Header - macOS style */}
         <View style={{
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
           paddingHorizontal: spacing.xl,
-          paddingVertical: spacing.lg,
-          backgroundColor: colors.white,
-          ...shadows.sm,
+          paddingVertical: spacing.md,
+          backgroundColor: '#F5F5F5',
+          borderBottomWidth: 1,
+          borderBottomColor: '#D0D0D0',
         }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-            <BarChart3 size={28} color={colors.primary} />
+            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#E5F1FF', alignItems: 'center', justifyContent: 'center' }}>
+              <BarChart3 size={22} color="#007AFF" />
+            </View>
             <View>
-              <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
-                📊 Tableau de Bord
+              <Text style={{ fontSize: fontSize.lg, fontWeight: '600', color: '#333333' }}>
+                Tableau de Bord
               </Text>
-              <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>
+              <Text style={{ fontSize: fontSize.sm, color: '#666666' }}>
                 Statistiques et Analyses
               </Text>
             </View>
@@ -176,15 +179,17 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           <TouchableOpacity 
             onPress={onClose}
             style={{ 
-              width: 44, 
-              height: 44, 
-              borderRadius: 22, 
-              backgroundColor: colors.background,
+              width: 32, 
+              height: 32, 
+              borderRadius: 6, 
+              backgroundColor: '#E8E8E8',
+              borderWidth: 1,
+              borderColor: '#C8C8C8',
               alignItems: 'center', 
               justifyContent: 'center',
             }}
           >
-            <X size={24} color={colors.textSecondary} />
+            <X size={16} color="#666666" />
           </TouchableOpacity>
         </View>
         

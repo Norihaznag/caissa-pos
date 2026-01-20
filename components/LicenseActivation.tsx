@@ -99,7 +99,7 @@ export default function LicenseActivation({ onActivated }: LicenseActivationProp
           <View style={{
             width: 80,
             height: 80,
-            borderRadius: 20,
+            borderRadius: 16,
             backgroundColor: colors.primary,
             alignItems: 'center',
             justifyContent: 'center',
@@ -132,7 +132,7 @@ export default function LicenseActivation({ onActivated }: LicenseActivationProp
             <View style={{
               width: 90,
               height: 90,
-              borderRadius: 24,
+              borderRadius: 16,
               backgroundColor: colors.primary,
               alignItems: 'center',
               justifyContent: 'center',

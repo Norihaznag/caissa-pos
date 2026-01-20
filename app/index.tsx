@@ -1,15 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Coffee, Database } from 'lucide-react-native';
+import { Coffee, Database, Delete } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { initOfflineDatabase, offlineUserService } from '../lib/offline-db';
-import { colors, spacing, borderRadius, fontSize, shadows } from '../lib/theme';
 import * as Haptics from 'expo-haptics';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const BUTTON_SIZE = Math.min(72, (SCREEN_WIDTH - 100) / 3);
 
 export default function LoginScreen() {
   const [pin, setPin] = useState('');
@@ -17,6 +13,15 @@ export default function LoginScreen() {
   const [initializing, setInitializing] = useState(true);
   const router = useRouter();
   const login = useAppStore((state) => state.login);
+  const { width, height } = useWindowDimensions();
+  
+  // Responsive sizing
+  const isLandscape = width > height;
+  const isTablet = width >= 768;
+  const isLargeScreen = width >= 1024;
+  
+  // Dynamic button sizing
+  const numpadButtonSize = isLargeScreen ? 72 : isTablet ? 64 : 56;
 
   // Initialize offline database on mount
   useEffect(() => {
@@ -105,199 +110,281 @@ export default function LoginScreen() {
       accessibilityLabel={typeof value === 'number' ? `Chiffre ${value}` : value}
       accessibilityRole="button"
       style={{
-        width: BUTTON_SIZE,
-        height: BUTTON_SIZE,
-        borderRadius: borderRadius.lg,
-        backgroundColor: isSpecial ? colors.errorLight : colors.white,
+        width: numpadButtonSize,
+        height: numpadButtonSize,
+        borderRadius: 8,
+        backgroundColor: isSpecial ? '#FFE5E5' : '#FFFFFF',
         borderWidth: 1,
-        borderColor: isSpecial ? colors.error : colors.borderLight,
+        borderColor: isSpecial ? '#FF3B30' : '#C0C0C0',
         alignItems: 'center',
         justifyContent: 'center',
-        ...shadows.sm,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 2,
+        elevation: 2,
       }}
       activeOpacity={0.7}
     >
-      <Text style={{
-        fontSize: typeof value === 'number' ? 26 : 14,
-        fontWeight: '600',
-        color: isSpecial ? colors.error : colors.textPrimary,
-      }}>
-        {value}
-      </Text>
+      {value === '⌫' ? (
+        <Delete size={20} color="#666666" />
+      ) : (
+        <Text style={{
+          fontSize: typeof value === 'number' ? 24 : 13,
+          fontWeight: '600',
+          color: isSpecial ? '#FF3B30' : '#333333',
+        }}>
+          {value}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 
-  // Show loading screen during initialization
+  // Show loading screen during initialization - macOS Style
   if (initializing) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#E8E8E8', justifyContent: 'center', alignItems: 'center' }}>
         <View style={{
           width: 80,
           height: 80,
-          borderRadius: 20,
-          backgroundColor: colors.primary,
+          borderRadius: 16,
+          backgroundColor: '#007AFF',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: 20,
+          marginBottom: 24,
+          shadowColor: '#007AFF',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
         }}>
-          <Coffee size={40} color={colors.white} />
+          <Coffee size={40} color="#FFFFFF" />
         </View>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 16, color: colors.textSecondary, fontSize: fontSize.md }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={{ marginTop: 16, color: '#8E8E93', fontSize: 15, fontWeight: '500' }}>
           Initialisation...
         </Text>
       </SafeAreaView>
     );
   }
 
+  // macOS-inspired Lock Screen
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#E8E8E8' }}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <View style={{ flex: 1, paddingHorizontal: spacing.xl, paddingTop: spacing.xxxl, paddingBottom: spacing.xl }}>
-          {/* Header - Logo & Title */}
-          <View style={{ alignItems: 'center', marginBottom: spacing.xxl }}>
+        {/* Main Container - Horizontal layout for tablets in landscape */}
+        <View style={{ 
+          flex: 1, 
+          flexDirection: isLandscape && isTablet ? 'row' : 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: isTablet ? 40 : 24,
+          gap: isLandscape && isTablet ? 60 : 0,
+        }}>
+          
+          {/* Left/Top Section - Branding */}
+          <View style={{ 
+            flex: isLandscape && isTablet ? 1 : 0,
+            alignItems: 'center', 
+            justifyContent: 'center',
+            marginBottom: isLandscape && isTablet ? 0 : 32,
+            maxWidth: isLandscape && isTablet ? 400 : undefined,
+          }}>
+            {/* App Icon - macOS Style */}
             <View style={{
-              width: 80,
-              height: 80,
-              backgroundColor: colors.primary,
-              borderRadius: 20,
+              width: isTablet ? 100 : 80,
+              height: isTablet ? 100 : 80,
+              backgroundColor: '#007AFF',
+              borderRadius: isTablet ? 22 : 18,
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: spacing.lg,
-              ...shadows.lg,
+              marginBottom: 20,
+              shadowColor: '#007AFF',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.35,
+              shadowRadius: 12,
+              elevation: 8,
             }}>
-              <Coffee size={40} color={colors.white} />
+              <Coffee size={isTablet ? 50 : 40} color="#FFFFFF" />
             </View>
-            <Text style={{ fontSize: fontSize.title, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.xs }}>
+            
+            {/* App Name */}
+            <Text style={{ 
+              fontSize: isTablet ? 32 : 26, 
+              fontWeight: '700', 
+              color: '#1D1D1F', 
+              marginBottom: 6,
+              letterSpacing: -0.5,
+            }}>
               CaissaPro
             </Text>
-            <Text style={{ fontSize: fontSize.md, color: colors.textSecondary }}>
+            <Text style={{ 
+              fontSize: isTablet ? 16 : 14, 
+              color: '#8E8E93',
+              fontWeight: '400',
+              marginBottom: isLandscape && isTablet ? 24 : 16,
+            }}>
               Système de caisse intelligent
             </Text>
-          </View>
 
-          {/* Offline Mode Indicator */}
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: spacing.sm,
-            marginBottom: spacing.xxl,
-          }}>
+            {/* Offline Mode Badge */}
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              gap: spacing.xs,
-              backgroundColor: colors.successLight,
-              paddingHorizontal: spacing.md,
-              paddingVertical: spacing.xs,
-              borderRadius: borderRadius.full,
+              gap: 6,
+              backgroundColor: '#E8F8EB',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: '#B8E6C1',
             }}>
-              <Database size={14} color={colors.success} />
-              <Text style={{ fontSize: fontSize.xs, color: colors.success, fontWeight: '500' }}>
+              <Database size={14} color="#34C759" />
+              <Text style={{ fontSize: 12, color: '#34C759', fontWeight: '600' }}>
                 Mode Hors ligne
               </Text>
             </View>
-          </View>
 
-          {/* PIN Display - Clean Card Style */}
-          <View style={{
-            backgroundColor: colors.white,
-            borderRadius: borderRadius.xl,
-            padding: spacing.xl,
-            marginBottom: spacing.xl,
-            alignItems: 'center',
-            ...shadows.sm,
-          }}>
-            <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.lg }}>
-              Entrez votre code PIN
-            </Text>
-            <View style={{ flexDirection: 'row', gap: spacing.md }}>
-              {[0, 1, 2, 3].map((index) => (
-                <View
-                  key={index}
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: borderRadius.md,
-                    borderWidth: 2,
-                    borderColor: pin.length > index ? colors.primary : colors.borderLight,
-                    backgroundColor: pin.length > index ? colors.primaryLight : colors.background,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {pin.length > index && (
-                    <View style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: 7,
-                      backgroundColor: colors.primary,
-                    }} />
-                  )}
-                </View>
-              ))}
-            </View>
-            {loading && (
-              <View style={{ marginTop: spacing.xl }}>
-                <ActivityIndicator size="small" color={colors.primary} />
+            {/* Additional info for landscape tablets */}
+            {isLandscape && isTablet && (
+              <View style={{ marginTop: 32, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, color: '#8E8E93', textAlign: 'center', lineHeight: 20 }}>
+                  Entrez votre code PIN à 4 chiffres{'\n'}pour accéder à votre caisse
+                </Text>
               </View>
             )}
           </View>
 
-          {/* Number Pad - Clean Grid */}
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          {/* Right/Bottom Section - PIN Entry */}
+          <View style={{ 
+            flex: isLandscape && isTablet ? 1 : 0,
+            alignItems: 'center',
+            maxWidth: isLandscape && isTablet ? 360 : undefined,
+          }}>
+            {/* PIN Card - macOS Window Style */}
             <View style={{
-              backgroundColor: colors.white,
-              borderRadius: borderRadius.xl,
-              padding: spacing.lg,
-              ...shadows.sm,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              overflow: 'hidden',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.12,
+              shadowRadius: 16,
+              elevation: 8,
+              borderWidth: 1,
+              borderColor: '#D0D0D0',
             }}>
-              {/* Row 1: 1, 2, 3 */}
-              <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md }}>
-                {[1, 2, 3].map((num) => (
-                  <React.Fragment key={`num-${num}`}>
-                    {renderNumpadButton(num, () => handlePinPress(num.toString()), false, `num-${num}`)}
-                  </React.Fragment>
-                ))}
+              {/* Window Title Bar */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#F5F5F5',
+                borderBottomWidth: 1,
+                borderBottomColor: '#D0D0D0',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+              }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#333333' }}>
+                  Authentification
+                </Text>
               </View>
-              
-              {/* Row 2: 4, 5, 6 */}
-              <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md }}>
-                {[4, 5, 6].map((num) => (
-                  <React.Fragment key={`num-${num}`}>
-                    {renderNumpadButton(num, () => handlePinPress(num.toString()), false, `num-${num}`)}
-                  </React.Fragment>
-                ))}
-              </View>
-              
-              {/* Row 3: 7, 8, 9 */}
-              <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md }}>
-                {[7, 8, 9].map((num) => (
-                  <React.Fragment key={`num-${num}`}>
-                    {renderNumpadButton(num, () => handlePinPress(num.toString()), false, `num-${num}`)}
-                  </React.Fragment>
-                ))}
-              </View>
-              
-              {/* Row 4: CLR, 0, ⌫ */}
-              <View style={{ flexDirection: 'row', gap: spacing.md }}>
-                {renderNumpadButton('CLR', handleClear, true, 'clear')}
-                {renderNumpadButton(0, () => handlePinPress('0'), false, 'num-0')}
-                {renderNumpadButton('⌫', handleBackspace, false, 'backspace')}
+
+              {/* PIN Content */}
+              <View style={{ padding: isTablet ? 32 : 24, alignItems: 'center' }}>
+                {/* PIN Instruction */}
+                <Text style={{ fontSize: 14, color: '#8E8E93', marginBottom: 20 }}>
+                  Entrez votre code PIN
+                </Text>
+                
+                {/* PIN Dots */}
+                <View style={{ flexDirection: 'row', gap: 14, marginBottom: 28 }}>
+                  {[0, 1, 2, 3].map((index) => (
+                    <View
+                      key={index}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 8,
+                        borderWidth: 2,
+                        borderColor: pin.length > index ? '#007AFF' : '#D0D0D0',
+                        backgroundColor: pin.length > index ? '#E5F1FF' : '#F8F8F8',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {pin.length > index && (
+                        <View style={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: 7,
+                          backgroundColor: '#007AFF',
+                        }} />
+                      )}
+                    </View>
+                  ))}
+                </View>
+                
+                {loading && (
+                  <View style={{ marginBottom: 20 }}>
+                    <ActivityIndicator size="small" color="#007AFF" />
+                  </View>
+                )}
+
+                {/* Number Pad */}
+                <View style={{ gap: 10 }}>
+                  {/* Row 1: 1, 2, 3 */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {[1, 2, 3].map((num) => (
+                      <React.Fragment key={`num-${num}`}>
+                        {renderNumpadButton(num, () => handlePinPress(num.toString()), false, `num-${num}`)}
+                      </React.Fragment>
+                    ))}
+                  </View>
+                  
+                  {/* Row 2: 4, 5, 6 */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {[4, 5, 6].map((num) => (
+                      <React.Fragment key={`num-${num}`}>
+                        {renderNumpadButton(num, () => handlePinPress(num.toString()), false, `num-${num}`)}
+                      </React.Fragment>
+                    ))}
+                  </View>
+                  
+                  {/* Row 3: 7, 8, 9 */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {[7, 8, 9].map((num) => (
+                      <React.Fragment key={`num-${num}`}>
+                        {renderNumpadButton(num, () => handlePinPress(num.toString()), false, `num-${num}`)}
+                      </React.Fragment>
+                    ))}
+                  </View>
+                  
+                  {/* Row 4: CLR, 0, ⌫ */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {renderNumpadButton('CLR', handleClear, true, 'clear')}
+                    {renderNumpadButton(0, () => handlePinPress('0'), false, 'num-0')}
+                    {renderNumpadButton('⌫', handleBackspace, false, 'backspace')}
+                  </View>
+                </View>
               </View>
             </View>
           </View>
+        </View>
 
-          {/* Footer */}
-          <View style={{ alignItems: 'center', paddingTop: spacing.lg }}>
-            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-              v1.0.0 • CaissaPro POS
-            </Text>
-          </View>
+        {/* Footer */}
+        <View style={{ 
+          position: 'absolute', 
+          bottom: 20, 
+          left: 0, 
+          right: 0, 
+          alignItems: 'center' 
+        }}>
+          <Text style={{ fontSize: 12, color: '#8E8E93', fontWeight: '400' }}>
+            v1.0.0 • CaissaPro POS
+          </Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

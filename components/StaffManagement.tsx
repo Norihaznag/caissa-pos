@@ -413,14 +413,16 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
               flexDirection: 'row',
               alignItems: 'center',
               gap: spacing.xs,
-              backgroundColor: colors.primary,
+              backgroundColor: '#007AFF',
               paddingHorizontal: spacing.md,
               paddingVertical: spacing.sm,
-              borderRadius: borderRadius.full,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: '#006AE6',
             }}
           >
-            <Plus size={16} color={colors.white} />
-            <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.white }}>
+            <Plus size={16} color="#FFFFFF" />
+            <Text style={{ fontSize: fontSize.sm, fontWeight: '500', color: '#FFFFFF' }}>
               Ouvrir shift
             </Text>
           </TouchableOpacity>
@@ -475,7 +477,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
                     backgroundColor: getRoleColor(shift.userRole || ''),
                     paddingHorizontal: spacing.sm,
                     paddingVertical: 2,
-                    borderRadius: borderRadius.full,
+                    borderRadius: 10,
                   }}>
                     <Text style={{ fontSize: fontSize.xs, color: colors.white, fontWeight: '600' }}>
                       {getRoleLabel(shift.userRole || '')}
@@ -676,14 +678,16 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
             flexDirection: 'row',
             alignItems: 'center',
             gap: spacing.xs,
-            backgroundColor: colors.primary,
+            backgroundColor: '#007AFF',
             paddingHorizontal: spacing.md,
             paddingVertical: spacing.sm,
-            borderRadius: borderRadius.full,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: '#006AE6',
           }}
         >
-          <Plus size={16} color={colors.white} />
-          <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.white }}>
+          <Plus size={16} color="#FFFFFF" />
+          <Text style={{ fontSize: fontSize.sm, fontWeight: '500', color: '#FFFFFF' }}>
             Ajouter
           </Text>
         </TouchableOpacity>
@@ -714,7 +718,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
                 backgroundColor: colors.primaryLight,
                 paddingHorizontal: spacing.sm,
                 paddingVertical: 2,
-                borderRadius: borderRadius.full,
+                borderRadius: 10,
               }}>
                 <Text style={{ fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' }}>
                   Aujourd'hui
@@ -837,7 +841,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
                                entry.paymentStatus === 'partial' ? colors.warningLight : colors.errorLight,
                 paddingHorizontal: spacing.sm,
                 paddingVertical: 2,
-                borderRadius: borderRadius.full,
+                borderRadius: 10,
               }}>
                 <Text style={{
                   fontSize: fontSize.xs,
@@ -878,23 +882,33 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        {/* Header */}
+        {/* Header - macOS Style */}
         <View style={{
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
-          paddingHorizontal: spacing.xl,
-          paddingVertical: spacing.lg,
-          backgroundColor: colors.white,
-          ...shadows.sm,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: '#F5F5F5',
+          borderBottomWidth: 1,
+          borderBottomColor: '#D0D0D0',
         }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-            <Users size={28} color={colors.primary} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              backgroundColor: '#FF9500',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Users size={16} color="#FFFFFF" />
+            </View>
             <View>
-              <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
-                👥 Gestion Équipe
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#1C1C1E' }}>
+                Gestion Équipe
               </Text>
-              <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>
+              <Text style={{ fontSize: 12, color: '#8E8E93' }}>
                 Shifts, Planning & Salaires
               </Text>
             </View>
@@ -902,15 +916,17 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
           <TouchableOpacity
             onPress={onClose}
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: colors.background,
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              backgroundColor: '#E8E8E8',
               alignItems: 'center',
               justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: '#C8C8C8',
             }}
           >
-            <X size={24} color={colors.textSecondary} />
+            <X size={18} color="#666666" />
           </TouchableOpacity>
         </View>
         

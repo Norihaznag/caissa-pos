@@ -154,21 +154,23 @@ export const commonStyles = {
     ...shadows.sm,
   },
   
-  // Input
+  // Input - macOS style
   input: {
     backgroundColor: colors.background,
-    borderRadius: borderRadius.full,
+    borderRadius: 8,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     fontSize: fontSize.md,
     color: colors.textPrimary,
+    borderWidth: 1,
+    borderColor: '#D0D0D0',
   },
   
-  // Chip/Pill
+  // Chip/Pill - use rounded for badges
   chip: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
+    borderRadius: 10,
     backgroundColor: colors.background,
   },
   chipActive: {

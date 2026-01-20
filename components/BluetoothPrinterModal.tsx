@@ -297,7 +297,7 @@ export function BluetoothPrinterModal({
         <View style={{
           backgroundColor: colors.warningLight,
           padding: spacing.lg,
-          borderRadius: 16,
+          borderRadius: 8,
           marginBottom: spacing.lg,
           flexDirection: 'row',
           alignItems: 'center',
@@ -321,7 +321,7 @@ export function BluetoothPrinterModal({
         <View style={{
           backgroundColor: colors.successLight,
           padding: spacing.lg,
-          borderRadius: 16,
+          borderRadius: 8,
           marginBottom: spacing.lg,
         }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
@@ -393,7 +393,7 @@ export function BluetoothPrinterModal({
         <View style={{
           backgroundColor: colors.errorLight,
           padding: spacing.lg,
-          borderRadius: 16,
+          borderRadius: 8,
           marginBottom: spacing.lg,
           flexDirection: 'row',
           alignItems: 'center',
@@ -447,7 +447,7 @@ export function BluetoothPrinterModal({
             ? colors.gray200 
             : colors.primary,
           padding: spacing.lg,
-          borderRadius: 16,
+          borderRadius: 8,
           marginBottom: spacing.lg,
           flexDirection: 'row',
           alignItems: 'center',
@@ -513,7 +513,7 @@ export function BluetoothPrinterModal({
         style={{
           backgroundColor: isConnected ? colors.successLight : colors.white,
           padding: spacing.lg,
-          borderRadius: 14,
+          borderRadius: 8,
           marginBottom: spacing.sm,
           flexDirection: 'row',
           alignItems: 'center',
@@ -598,39 +598,39 @@ export function BluetoothPrinterModal({
       onRequestClose={onClose}
     >
       <View style={{ flex: 1, backgroundColor: colors.gray50 }}>
-        {/* Header */}
+        {/* Header - macOS Style */}
         <View style={{
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: spacing.lg,
-          paddingTop: spacing.xl,
-          backgroundColor: colors.white,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: '#F5F5F5',
           borderBottomWidth: 1,
-          borderBottomColor: colors.gray200,
+          borderBottomColor: '#D0D0D0',
         }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              backgroundColor: colors.primaryLight,
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              backgroundColor: '#007AFF',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <Bluetooth size={22} color={colors.primary} />
+              <Bluetooth size={16} color="#FFFFFF" />
             </View>
             <View>
               <Text style={{ 
-                fontSize: 18, 
-                fontWeight: '700', 
-                color: colors.gray800 
+                fontSize: 16, 
+                fontWeight: '600', 
+                color: '#1C1C1E' 
               }}>
                 Imprimante Bluetooth
               </Text>
               <Text style={{ 
-                fontSize: 13, 
-                color: colors.gray500,
+                fontSize: 12, 
+                color: '#8E8E93',
                 marginTop: 1,
               }}>
                 Connexion rapide POS
@@ -640,15 +640,17 @@ export function BluetoothPrinterModal({
           <TouchableOpacity
             onPress={onClose}
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: colors.gray100,
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              backgroundColor: '#E8E8E8',
               alignItems: 'center',
               justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: '#C8C8C8',
             }}
           >
-            <X size={20} color={colors.gray600} />
+            <X size={18} color="#666666" />
           </TouchableOpacity>
         </View>
 
@@ -666,7 +668,7 @@ export function BluetoothPrinterModal({
             style={{
               backgroundColor: colors.white,
               padding: spacing.lg,
-              borderRadius: 14,
+              borderRadius: 8,
               marginBottom: spacing.lg,
               flexDirection: 'row',
               alignItems: 'center',
@@ -710,7 +712,7 @@ export function BluetoothPrinterModal({
           {/* Scan Section */}
           <View style={{
             backgroundColor: colors.white,
-            borderRadius: 16,
+            borderRadius: 8,
             borderWidth: 1,
             borderColor: colors.gray200,
             overflow: 'hidden',
@@ -830,7 +832,7 @@ export function BluetoothPrinterModal({
           padding: spacing.lg,
           margin: spacing.lg,
           marginTop: 0,
-          borderRadius: 12,
+          borderRadius: 8,
         }}>
           <Text style={{ 
             color: colors.primaryDark, 
