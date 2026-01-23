@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Printer, Bluetooth, Wifi, Usb, Check, RefreshCw, Settings } from 'lucide-react-native';
+import { ArrowLeft, Printer, Bluetooth, Wifi, Usb, Check, RefreshCw, Settings, Info } from 'lucide-react-native';
 import { 
   PrinterConfig, 
   PrinterType, 
@@ -147,8 +147,24 @@ export default function PrinterSettingsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#E8E8E8', alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{
+          width: 64,
+          height: 64,
+          borderRadius: 14,
+          backgroundColor: '#FFFFFF',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 16,
+          borderWidth: 1,
+          borderColor: '#CFCFCF',
+        }}>
+          <Printer size={28} color="#007AFF" />
+        </View>
+        <ActivityIndicator size="small" color="#007AFF" />
+        <Text style={{ marginTop: 12, fontSize: 13, fontWeight: '500', color: '#8E8E93' }}>
+          Chargement...
+        </Text>
       </SafeAreaView>
     );
   }
@@ -466,7 +482,10 @@ export default function PrinterSettingsScreen() {
           borderWidth: 1,
           borderColor: '#BFDBFE',
         }}>
-          <Text style={{ color: '#1E40AF', fontWeight: '600', marginBottom: 8, fontSize: 14 }}>💡 Conseils</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <Info size={16} color="#1E40AF" />
+            <Text style={{ color: '#1E40AF', fontWeight: '600', fontSize: 14 }}>Conseils</Text>
+          </View>
           <Text style={{ color: '#1D4ED8', fontSize: 13, lineHeight: 20 }}>
             • Pour Bluetooth: Appairez d&apos;abord l&apos;imprimante dans les paramètres du téléphone{'\n'}
             • Pour Réseau: Utilisez une IP statique pour l&apos;imprimante{'\n'}

@@ -1,36 +1,41 @@
-// Facebook Lite Design System - Clean, Fast, Professional POS Theme
-// Inspired by Facebook Lite's minimal yet functional design
+// macOS Design System - Clean, Professional POS Theme
+// Inspired by macOS System Preferences / Panel design
 
 export const colors = {
-  // Primary - Facebook Blue (slightly adjusted for POS)
-  primary: '#1877F2',
-  primaryLight: '#E7F3FF',
-  primaryDark: '#1565D8',
+  // Primary - macOS Blue (subtle, not oversaturated)
+  primary: '#007AFF',
+  primaryLight: '#E5F2FF',
+  primaryDark: '#0066DD',
   
-  // Secondary accents
-  success: '#31A24C',
-  successLight: '#E6F4EA',
-  warning: '#F7B928',
-  warningLight: '#FEF6E3',
-  error: '#FA383E',
+  // Secondary accents - Apple system colors
+  success: '#34C759',
+  successLight: '#E8F8ED',
+  warning: '#FF9500',
+  warningLight: '#FFF4E5',
+  error: '#FF3B30',
   errorLight: '#FFEBE9',
   
-  // Neutral palette
+  // Neutral palette - macOS style
   white: '#FFFFFF',
-  background: '#F0F2F5',
+  background: '#ECECEC',
   surface: '#FFFFFF',
-  border: '#DADDE1',
-  borderLight: '#E4E6EB',
+  border: '#CFCFCF',
+  borderLight: '#D7D7D7',
   
   // Text hierarchy
-  textPrimary: '#1C1E21',
-  textSecondary: '#65676B',
-  textMuted: '#8A8D91',
+  textPrimary: '#111111',
+  textSecondary: '#666666',
+  textMuted: '#999999',
   textInverse: '#FFFFFF',
   
   // Overlays
   overlay: 'rgba(0, 0, 0, 0.4)',
-  overlayLight: 'rgba(0, 0, 0, 0.1)',
+  overlayLight: 'rgba(0, 0, 0, 0.08)',
+  
+  // macOS specific
+  toolbar: '#E8E8E8',
+  separator: '#D7D7D7',
+  cardBorder: '#CFCFCF',
 };
 
 export const spacing = {
@@ -46,19 +51,19 @@ export const spacing = {
 export const borderRadius = {
   sm: 6,
   md: 10,
-  lg: 14,
-  xl: 20,
+  lg: 12,
+  xl: 14,
   full: 9999,
 };
 
 export const fontSize = {
   xs: 11,
   sm: 13,
-  md: 15,
-  lg: 17,
-  xl: 20,
-  xxl: 24,
-  title: 28,
+  md: 14,
+  lg: 16,
+  xl: 18,
+  xxl: 22,
+  title: 26,
 };
 
 export const fontWeight = {
@@ -68,28 +73,35 @@ export const fontWeight = {
   bold: '700' as const,
 };
 
-// Shadow presets
+// Shadow presets - macOS style (very subtle)
 export const shadows = {
+  none: {
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
   sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 1,
     elevation: 1,
   },
   md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  lg: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
-  },
-  lg: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
   },
 };
 
@@ -116,65 +128,141 @@ export const fontSizeTablet = {
   title: 34,
 };
 
-// Common component styles
+// Common component styles - macOS design
 export const commonStyles = {
-  // Buttons
+  // Buttons - macOS style (subtle gradients via border)
   buttonPrimary: {
     backgroundColor: colors.primary,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: borderRadius.md,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.primaryDark,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    minHeight: 40,
   },
   buttonSecondary: {
-    backgroundColor: colors.primaryLight,
-    paddingVertical: 14,
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: borderRadius.md,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    minHeight: 40,
   },
   buttonOutline: {
     backgroundColor: colors.white,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: borderRadius.md,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    minHeight: 40,
+  },
+  // Quantity icon buttons - macOS squircle style
+  iconButtonSquare: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 1,
+    borderColor: '#D0D0D0',
+  },
+  iconButtonSquarePressed: {
+    backgroundColor: '#E0E0E0',
+  },
+  iconButtonDestructive: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#FFF0F0',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
   },
   
-  // Cards
+  // Cards - macOS panel style
   card: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
     padding: spacing.lg,
-    ...shadows.sm,
   },
   
   // Input - macOS style
   input: {
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     fontSize: fontSize.md,
     color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#D0D0D0',
+    borderColor: colors.border,
   },
   
-  // Chip/Pill - use rounded for badges
+  // Chip/Pill - macOS segmented control style
   chip: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: 10,
-    backgroundColor: colors.background,
+    borderRadius: 8,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   chipActive: {
     backgroundColor: colors.primary,
+    borderColor: colors.primaryDark,
+  },
+  
+  // Toolbar - macOS style
+  toolbar: {
+    backgroundColor: colors.toolbar,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.separator,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  
+  // Icon button - macOS style (header close/action buttons)
+  iconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#E8E8E8',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 1,
+    borderColor: '#C8C8C8',
+  },
+  iconButtonHover: {
+    backgroundColor: '#D8D8D8',
+    borderColor: '#B8B8B8',
+  },
+  
+  // Tab/Segment control - macOS style
+  tabSegment: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingVertical: 12,
+    backgroundColor: 'transparent',
+    gap: 6,
+  },
+  tabSegmentActive: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    borderBottomWidth: 2,
+    borderBottomColor: '#007AFF',
   },
 };
 

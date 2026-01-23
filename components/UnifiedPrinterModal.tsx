@@ -221,14 +221,14 @@ export function UnifiedPrinterModal({
         onConnected?.(device);
 
         Alert.alert(
-          '✅ Connecté!',
+          'Connecté',
           `Imprimante "${device.name}" connectée avec succès.`,
           [{ text: 'Super!' }]
         );
       } else {
         const error = UnifiedPrinterService.getConnectionStatus().lastError;
         Alert.alert(
-          '❌ Échec de connexion',
+          'Échec de connexion',
           error || 'Impossible de se connecter à l\'imprimante.',
           [{ text: 'OK' }]
         );
@@ -548,7 +548,7 @@ export function UnifiedPrinterModal({
           marginBottom: spacing.md,
         }}
       >
-        ➕ Ajouter une imprimante WiFi
+        Ajouter une imprimante WiFi
       </Text>
 
       <TextInput
@@ -647,7 +647,7 @@ export function UnifiedPrinterModal({
           marginBottom: spacing.md,
         }}
       >
-        🧪 Test d'impression
+        Test d'impression
       </Text>
 
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -770,9 +770,9 @@ export function UnifiedPrinterModal({
             justifyContent: 'space-between',
             paddingHorizontal: 16,
             paddingVertical: 12,
-            backgroundColor: '#F5F5F5',
+            backgroundColor: '#E8E8E8',
             borderBottomWidth: 1,
-            borderBottomColor: '#D0D0D0',
+            borderBottomColor: '#CFCFCF',
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -795,7 +795,7 @@ export function UnifiedPrinterModal({
             style={{ 
               width: 32,
               height: 32,
-              borderRadius: 6,
+              borderRadius: 8,
               backgroundColor: '#E8E8E8',
               alignItems: 'center',
               justifyContent: 'center',
@@ -904,7 +904,7 @@ export function UnifiedPrinterModal({
           style={{
             flexDirection: 'row',
             borderBottomWidth: 1,
-            borderBottomColor: colors.gray200,
+            borderBottomColor: '#CFCFCF',
           }}
         >
           {renderTab('bluetooth', 'Bluetooth')}
@@ -961,7 +961,7 @@ export function UnifiedPrinterModal({
                   backgroundColor: getTypeColor(activeTab),
                   paddingHorizontal: spacing.md,
                   paddingVertical: spacing.sm,
-                  borderRadius: 8,
+                  borderRadius: 10,
                   gap: spacing.xs,
                   opacity: scanning ? 0.7 : 1,
                 }}

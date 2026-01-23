@@ -7,34 +7,69 @@ import { Platform } from 'react-native';
 
 // Open the database (async in SDK 54+)
 let db: SQLite.SQLiteDatabase | null = null;
+let dbInitPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
-  if (!db) {
-    db = await SQLite.openDatabaseAsync('caissapro_offline.db');
+  // If already initialized, return immediately
+  if (db) {
+    return db;
   }
-  return db;
+  
+  // If initialization is in progress, wait for it
+  if (dbInitPromise) {
+    return dbInitPromise;
+  }
+  
+  // Start initialization (only once)
+  dbInitPromise = (async () => {
+    try {
+      db = await SQLite.openDatabaseAsync('caissapro_offline.db');
+      return db;
+    } catch (error) {
+      dbInitPromise = null; // Reset on error so we can retry
+      throw error;
+    }
+  })();
+  
+  return dbInitPromise;
 };
 
 // ============================================================================
 // DATABASE INITIALIZATION
 // ============================================================================
 
+let dbSchemaInitialized = false;
+let dbSchemaInitPromise: Promise<void> | null = null;
+
 export const initOfflineDatabase = async (): Promise<void> => {
-  const database = await getDatabase();
+  // If already initialized, return immediately
+  if (dbSchemaInitialized) {
+    return;
+  }
   
-  // Enable foreign keys
-  await database.execAsync('PRAGMA foreign_keys = ON;');
+  // If initialization is in progress, wait for it
+  if (dbSchemaInitPromise) {
+    return dbSchemaInitPromise;
+  }
   
-  // Create categories table
-  await database.execAsync(`
-    CREATE TABLE IF NOT EXISTS categories (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      display_order INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      synced INTEGER DEFAULT 0
-    );
-  `);
+  // Start schema initialization (only once)
+  dbSchemaInitPromise = (async () => {
+    try {
+      const database = await getDatabase();
+      
+      // Enable foreign keys
+      await database.execAsync('PRAGMA foreign_keys = ON;');
+      
+      // Create categories table
+      await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS categories (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          display_order INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          synced INTEGER DEFAULT 0
+        );
+      `);
   
   // Create products table
   await database.execAsync(`
@@ -341,7 +376,15 @@ export const initOfflineDatabase = async (): Promise<void> => {
     await seedDemoData(database);
   }
   
+  dbSchemaInitialized = true;
   console.log('Offline database initialized');
+    } catch (error) {
+      dbSchemaInitPromise = null; // Reset on error so we can retry
+      throw error;
+    }
+  })();
+  
+  return dbSchemaInitPromise;
 };
 
 // Seed demo data for fresh installations
@@ -1588,15 +1631,45 @@ export const offlineUserService = {
   async delete(id: string): Promise<void> {
     const database = await getDatabase();
     
-    // First, set user_id to NULL in related tables to avoid foreign key constraint errors
-    await database.runAsync('UPDATE orders SET user_id = NULL WHERE user_id = ?', [id]);
-    await database.runAsync('UPDATE register_sessions SET user_id = NULL WHERE user_id = ?', [id]);
-    await database.runAsync('UPDATE payroll SET user_id = NULL WHERE user_id = ?', [id]);
-    await database.runAsync('UPDATE shifts SET user_id = NULL WHERE user_id = ?', [id]);
+    // Disable foreign key checks temporarily for this operation
+    await database.runAsync('PRAGMA foreign_keys = OFF');
     
-    // Now safely delete the user
-    await database.runAsync('DELETE FROM users WHERE id = ?', [id]);
-    await addToSyncQueue('users', id, 'DELETE', { id });
+    try {
+      // Nullify user references in orders table (cashier_id, waiter_id)
+      try {
+        await database.runAsync('UPDATE orders SET cashier_id = NULL WHERE cashier_id = ?', [id]);
+      } catch (e) { console.log('[USER DELETE] cashier_id column may not exist'); }
+      
+      try {
+        await database.runAsync('UPDATE orders SET waiter_id = NULL WHERE waiter_id = ?', [id]);
+      } catch (e) { console.log('[USER DELETE] waiter_id column may not exist'); }
+      
+      // Delete from related tables (these may not exist, so wrap in try-catch)
+      try {
+        await database.runAsync('DELETE FROM payroll WHERE user_id = ?', [id]);
+      } catch (e) { console.log('[USER DELETE] payroll table may not exist'); }
+      
+      try {
+        await database.runAsync('DELETE FROM shifts WHERE user_id = ?', [id]);
+      } catch (e) { console.log('[USER DELETE] shifts table may not exist'); }
+      
+      try {
+        await database.runAsync('DELETE FROM planned_shifts WHERE user_id = ?', [id]);
+      } catch (e) { console.log('[USER DELETE] planned_shifts table may not exist'); }
+      
+      try {
+        await database.runAsync('DELETE FROM staff_compensation WHERE user_id = ?', [id]);
+      } catch (e) { console.log('[USER DELETE] staff_compensation table may not exist'); }
+      
+      // Now safely delete the user
+      await database.runAsync('DELETE FROM users WHERE id = ?', [id]);
+      await addToSyncQueue('users', id, 'DELETE', { id });
+      
+      console.log('[USER] Successfully deleted user:', id);
+    } finally {
+      // Re-enable foreign key checks
+      await database.runAsync('PRAGMA foreign_keys = ON');
+    }
   },
   
   async isPinTaken(pin: string, excludeId?: string): Promise<boolean> {

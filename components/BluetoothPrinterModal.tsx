@@ -34,9 +34,10 @@ import {
   Signal,
   AlertTriangle,
   Check,
+  Info,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import BluetoothPrinterService from '../lib/BluetoothPrinterService';
+import { BluetoothPrinterService } from '../lib/BluetoothPrinterService';
 import type { 
   BluetoothDevice, 
   ConnectionStatus, 
@@ -160,7 +161,7 @@ export function BluetoothPrinterModal({
       
       if (foundDevices.length === 0) {
         Alert.alert(
-          '🔍 Aucun appareil trouvé',
+          'Aucun appareil trouvé',
           'Assurez-vous que:\n• Le Bluetooth est activé\n• L\'imprimante est allumée\n• L\'imprimante est appairée',
           [
             { text: 'OK' },
@@ -191,13 +192,13 @@ export function BluetoothPrinterModal({
         onConnected?.(device);
         
         Alert.alert(
-          '✅ Connecté!',
+          'Connecté',
           `Imprimante "${device.name}" connectée avec succès.`,
           [{ text: 'Super!' }]
         );
       } else {
         Alert.alert(
-          '❌ Échec de connexion',
+          'Échec de connexion',
           `Impossible de se connecter à "${device.name}".\nVérifiez que l'imprimante est allumée et à portée.`,
           [
             { text: 'OK' },
@@ -231,7 +232,7 @@ export function BluetoothPrinterModal({
         onConnected?.(lastDevice);
       } else {
         Alert.alert(
-          '❌ Échec de connexion rapide',
+          'Échec de connexion rapide',
           'L\'imprimante n\'est peut-être pas disponible. Essayez de scanner les appareils.',
           [
             { text: 'OK' },
@@ -257,9 +258,9 @@ export function BluetoothPrinterModal({
       const success = await BluetoothPrinterService.printTestPage();
       
       if (success) {
-        Alert.alert('✅ Test réussi', 'Le ticket de test a été imprimé avec succès!');
+        Alert.alert('Test réussi', 'Le ticket de test a été imprimé avec succès!');
       } else {
-        Alert.alert('❌ Échec du test', 'Impossible d\'imprimer le ticket de test.');
+        Alert.alert('Échec du test', 'Impossible d\'imprimer le ticket de test.');
       }
     } catch {
       Alert.alert('Erreur', 'Une erreur s\'est produite pendant l\'impression test.');
@@ -337,7 +338,7 @@ export function BluetoothPrinterModal({
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.gray800, fontWeight: '700', fontSize: 16 }}>
-                ✓ Connectée
+                Connectée
               </Text>
               <Text style={{ color: colors.gray600, fontSize: 14, marginTop: 2 }}>
                 {device.name}
@@ -477,7 +478,7 @@ export function BluetoothPrinterModal({
             fontWeight: '700', 
             fontSize: 17,
           }}>
-            ⚡ Connexion Rapide
+            Connexion Rapide
           </Text>
           <Text style={{ 
             color: 'rgba(255,255,255,0.8)', 
@@ -834,14 +835,16 @@ export function BluetoothPrinterModal({
           marginTop: 0,
           borderRadius: 8,
         }}>
-          <Text style={{ 
-            color: colors.primaryDark, 
-            fontWeight: '600', 
-            fontSize: 13,
-            marginBottom: spacing.xs,
-          }}>
-            💡 Conseil
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.xs }}>
+            <Info size={14} color={colors.primaryDark} />
+            <Text style={{ 
+              color: colors.primaryDark, 
+              fontWeight: '600', 
+              fontSize: 13,
+            }}>
+              Conseil
+            </Text>
+          </View>
           <Text style={{ color: colors.primary, fontSize: 12, lineHeight: 18 }}>
             {"Pour une connexion rapide, appairez d'abord votre imprimante dans les paramètres Bluetooth de l'appareil, puis scannez ici."}
           </Text>

@@ -58,6 +58,10 @@ export interface ReceiptDesign {
   footerMessage: string;
   footerMessageArabic: string;
   
+  // WiFi
+  wifiPassword: string;
+  showWifi: boolean;
+  
   // Toggle options - what to show/hide
   showTaxId: boolean;
   showOrderNumber: boolean;
@@ -88,6 +92,8 @@ const defaultReceiptDesign: ReceiptDesign = {
   taxId: '',
   footerMessage: 'Merci de votre visite!',
   footerMessageArabic: '',
+  wifiPassword: '',
+  showWifi: false,
   showTaxId: false,
   showOrderNumber: true,
   showTableNumber: true,

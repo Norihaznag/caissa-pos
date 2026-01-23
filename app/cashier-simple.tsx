@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, FlatList, ScrollView, Alert, TextInput, ActivityIndicator, useWindowDimensions, Modal, Platform, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView, Image } from 'react-native';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { View, Text, TouchableOpacity, FlatList, ScrollView, Alert, TextInput, ActivityIndicator, useWindowDimensions, Modal, Platform, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView, Image, Animated, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { 
-  LogOut, 
   ShoppingCart, 
   Trash2, 
   Plus, 
@@ -31,23 +29,19 @@ import {
   ClipboardList,
   Eye,
   Calendar,
-  Filter,
-  RefreshCw,
   CheckCircle,
   Clock,
-  List,
   ShoppingBag,
   Lock,
   Bluetooth,
   BluetoothConnected,
-  Zap,
   Inbox,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as Crypto from 'expo-crypto';
 import { useAppStore } from '../lib/store';
-import { spacing, borderRadius, fontSize, fontSizeTablet, shadows, touchTargets } from '../lib/theme';
+import { spacing, fontSize, shadows } from '../lib/theme';
 import { useAppTheme } from '../lib/themes/ThemeContext';
 import { 
   initOfflineDatabase, 
@@ -62,13 +56,15 @@ import {
   OfflineOrderItem,
   clearInvalidSyncQueueItems,
 } from '../lib/offline-db';
-import { loadPrinterConfig, printReceipt, ReceiptData, printDailyReport, DailyReportData, BluetoothPrinterService, quickPrintReceipt, UnifiedPrinterService, loadReceiptDesign, openCashDrawerNative } from '../lib/printing';
+import { loadPrinterConfig, printDailyReport, DailyReportData, BluetoothPrinterService, UnifiedPrinterService, loadReceiptDesign, openCashDrawerNative } from '../lib/printing';
 import { PrinterService, type ReceiptData as PrinterReceiptData } from '../lib/services/PrinterService';
 import { hasPermission, type UserRole } from '../lib/permissions';
 import AdminPanel from '../components/AdminPanel';
-import UnifiedPrinterModal from '../components/UnifiedPrinterModal';
-import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import { UnifiedPrinterModal } from '../components/UnifiedPrinterModal';
+import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 import { shiftService, Shift } from '../lib/shifts/shiftService';
+import { MacOSAppLoading } from '../components/ui/MacOSButton';
+import { OnboardingTutorial } from '../components/OnboardingTutorial';
 
 // Types
 interface CartItem {
@@ -119,6 +115,163 @@ interface StockProduct {
 // Quick Tables (reduced for simplicity)
 const TABLES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
+// ==================== ANIMATED COMPONENTS ====================
+
+/**
+ * AnimatedProductCard - macOS style product card with smooth press animation
+ * Fast, smooth animations that don't affect performance
+ */
+interface AnimatedProductCardProps {
+  children: React.ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+  width: number;
+  height: number;
+}
+
+function AnimatedProductCard({ children, onPress, disabled = false, width, height }: AnimatedProductCardProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  const handlePressIn = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 0,
+    }).start();
+  }, [scaleAnim]);
+  
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 4,
+    }).start();
+  }, [scaleAnim]);
+  
+  const handlePress = useCallback(() => {
+    if (!disabled) {
+      onPress();
+    }
+  }, [disabled, onPress]);
+  
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], width, height }}>
+      <Pressable
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled}
+        style={{ flex: 1 }}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+/**
+ * AnimatedCartItem - smooth cart item interactions
+ */
+interface AnimatedCartItemProps {
+  children: React.ReactNode;
+  onPress?: () => void;
+}
+
+function AnimatedCartItem({ children, onPress }: AnimatedCartItemProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  const handlePressIn = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 0,
+    }).start();
+  }, [scaleAnim]);
+  
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 3,
+    }).start();
+  }, [scaleAnim]);
+  
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={{ flex: 1 }}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+/**
+ * AnimatedButton - macOS style button with smooth press animation
+ */
+interface AnimatedButtonProps {
+  children: React.ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+  style?: any;
+}
+
+function AnimatedButton({ children, onPress, disabled = false, style }: AnimatedButtonProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [pressed, setPressed] = useState(false);
+  
+  const handlePressIn = useCallback(() => {
+    setPressed(true);
+    Animated.spring(scaleAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 0,
+    }).start();
+  }, [scaleAnim]);
+  
+  const handlePressOut = useCallback(() => {
+    setPressed(false);
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 25,
+      bounciness: 4,
+    }).start();
+  }, [scaleAnim]);
+  
+  const handlePress = useCallback(() => {
+    if (!disabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPress();
+    }
+  }, [disabled, onPress]);
+  
+  return (
+    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, pressed && { opacity: 0.9 }]}>
+      <Pressable
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled}
+        style={style}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// ==================== MAIN COMPONENT ====================
+
 export default function CashierSimpleScreen() {
   const router = useRouter();
   const logout = useAppStore((state) => state.logout);
@@ -136,8 +289,8 @@ export default function CashierSimpleScreen() {
   
   // Professional POS grid layout
   // Goal: Large, easily tappable cards with clear visual hierarchy
-  const CARD_GAP = 10;
-  const GRID_PADDING = 12;
+  const CARD_GAP = 12;
+  const GRID_PADDING = 16;
   
   // Calculate optimal columns based on screen and cart visibility
   const cartPanelWidth = !isPhone ? (isLargeTablet ? 400 : 340) : 0;
@@ -272,37 +425,32 @@ export default function CashierSimpleScreen() {
       case 'admin':
         return {
           color: colors.primary, // Theme primary color
-          title: '⚙️ Mode Admin',
+          title: 'Mode Admin',
           subtitle: 'Configuration & Paramètres',
         };
       case 'waiter':
         return {
           color: colors.warning || colors.primary, // Use warning or fallback to primary
-          title: '🍽️ Mode Serveur',
+          title: 'Mode Serveur',
           subtitle: 'Prise de commandes',
         };
       case 'cashier':
       default:
         return {
           color: colors.success || colors.primary, // Use success or fallback to primary
-          title: '💰 Mode Caisse',
+          title: 'Mode Caisse',
           subtitle: 'Ventes & Encaissements',
         };
     }
   }, [user?.role, colors]);
 
-  // Allow auto-rotation based on user's device settings
+  // Lock to landscape mode for tablets
   useEffect(() => {
-    const enableAutoRotate = async () => {
-      // Unlock orientation to follow device auto-rotate setting
-      await ScreenOrientation.unlockAsync();
+    const lockLandscape = async () => {
+      // Lock to landscape for tablet horizontal mode
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     };
-    enableAutoRotate();
-    
-    return () => {
-      // Reset to portrait when leaving the screen
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-    };
+    lockLandscape();
   }, []);
 
   // Initialize database and load data - FULLY OFFLINE
@@ -499,7 +647,7 @@ export default function CashierSimpleScreen() {
       const success = await printDailyReport(config, reportData);
       if (success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('✅ Rapport imprimé', 'Le rapport journalier a été envoyé à l\'imprimante.');
+        Alert.alert('Rapport imprimé', 'Le rapport journalier a été envoyé à l\'imprimante.');
       }
     } catch (error) {
       console.error('Print daily report error:', error);
@@ -536,7 +684,7 @@ export default function CashierSimpleScreen() {
       stockNotifications.push({
         id: `outofstock-${p.id}`,
         type: 'low_stock' as const,
-        title: '🚨 Rupture de stock!',
+        title: 'Rupture de stock',
         message: `${p.name} est épuisé`,
         data: { ...p, critical: true },
       });
@@ -547,7 +695,7 @@ export default function CashierSimpleScreen() {
       stockNotifications.push({
         id: `stock-${p.id}`,
         type: 'low_stock' as const,
-        title: '⚠️ Stock bas',
+        title: 'Stock bas',
         message: `${p.name}: ${p.stockQuantity} restant(s)`,
         data: p,
       });
@@ -614,7 +762,7 @@ export default function CashierSimpleScreen() {
         return [...otherNotifs, {
           id: 'expense-today',
           type: 'expense' as const,
-          title: '💰 Dépenses du jour',
+          title: 'Dépenses du jour',
           message: `Total: ${Math.round(total)} DH (${expenses.length} dépense${expenses.length > 1 ? 's' : ''})`,
           data: { total, count: expenses.length },
         }];
@@ -648,7 +796,7 @@ export default function CashierSimpleScreen() {
       setSessionOpeningAmount('');
       setShowSessionModal(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('✅ Caisse Ouverte', `Fond de caisse: ${amount.toFixed(0)} DH`);
+      Alert.alert('Caisse Ouverte', `Fond de caisse: ${amount.toFixed(0)} DH`);
     } catch (error: any) {
       Alert.alert('Erreur', error.message || 'Impossible d\'ouvrir la caisse');
     }
@@ -676,17 +824,17 @@ export default function CashierSimpleScreen() {
       
       // Show detailed closing report
       Alert.alert(
-        '✅ Caisse Fermée',
-        `📊 RAPPORT DE CLÔTURE\n\n` +
+        'Caisse Fermée',
+        `RAPPORT DE CLÔTURE\n\n` +
         `Fond ouverture: ${(closedSession.openingAmount || 0).toFixed(0)} DH\n` +
         `Ventes espèces: ${(closedSession.cashSales || 0).toFixed(0)} DH\n` +
         `Ventes carte: ${(closedSession.cardSales || 0).toFixed(0)} DH\n` +
         `Dépenses: -${todayExpenseTotal.toFixed(0)} DH\n` +
         `Monnaie rendue: -${(closedSession.totalChangeGiven || 0).toFixed(0)} DH\n\n` +
-        `💵 Attendu: ${expectedCash.toFixed(0)} DH\n` +
-        `💵 Compté: ${closingAmount.toFixed(0)} DH\n\n` +
-        `${difference >= 0 ? '✅' : '⚠️'} Écart: ${difference >= 0 ? '+' : ''}${difference.toFixed(0)} DH\n\n` +
-        `📦 ${closedSession.totalOrders || 0} commandes`
+        `Attendu: ${expectedCash.toFixed(0)} DH\n` +
+        `Compté: ${closingAmount.toFixed(0)} DH\n\n` +
+        `Écart: ${difference >= 0 ? '+' : ''}${difference.toFixed(0)} DH\n\n` +
+        `${closedSession.totalOrders || 0} commandes`
       );
     } catch (error: any) {
       Alert.alert('Erreur', error.message || 'Impossible de fermer la caisse');
@@ -715,7 +863,7 @@ export default function CashierSimpleScreen() {
       
       // Show success with updated total
       const newTotal = await offlineExpenseService.getTodayTotal();
-      Alert.alert('✅ Dépense ajoutée', `${amount.toFixed(0)} DH - Total du jour: ${Math.round(newTotal)} DH`);
+      Alert.alert('Dépense ajoutée', `${amount.toFixed(0)} DH - Total du jour: ${Math.round(newTotal)} DH`);
     } catch (error) {
       Alert.alert('Erreur', 'Impossible d\'ajouter la dépense');
     }
@@ -821,12 +969,19 @@ export default function CashierSimpleScreen() {
     });
   };
 
+  // Update note for a specific cart item
+  const updateItemNote = (productId: string, note: string) => {
+    setCart(prev => prev.map(item => 
+      item.productId === productId ? { ...item, note } : item
+    ));
+  };
+
   const clearCart = () => {
     // Safety confirmation for non-empty cart
     if (cart.length === 0) return;
     
     Alert.alert(
-      '🗑️ Vider le panier',
+      'Vider le panier',
       `Voulez-vous vraiment vider le panier ? (${cart.reduce((s, i) => s + i.quantity, 0)} articles)`,
       [
         { text: 'Non', style: 'cancel' },
@@ -862,6 +1017,7 @@ export default function CashierSimpleScreen() {
         productName: item.productName,
         price: item.price,
         quantity: item.quantity,
+        note: item.note || undefined,
       }));
       
       await offlineOrderService.create({
@@ -887,7 +1043,7 @@ export default function CashierSimpleScreen() {
       await loadPendingOrders();
       await loadTodayOrders();
       
-      Alert.alert('✅ En attente', `Table ${selectedTable === 0 ? 'Comptoir' : selectedTable} - ${total.toFixed(0)} DH`);
+      Alert.alert('En attente', `Table ${selectedTable === 0 ? 'Comptoir' : selectedTable} - ${total.toFixed(0)} DH`);
       
     } catch (error) {
       console.error('Hold order error:', error);
@@ -902,6 +1058,7 @@ export default function CashierSimpleScreen() {
       productName: item.productName,
       price: item.price,
       quantity: item.quantity,
+      note: item.note || '',
     })));
     setSelectedTable(order.tableNumber || 0);
     setCurrentOrderId(order.id);
@@ -998,6 +1155,7 @@ export default function CashierSimpleScreen() {
           quantity: item.quantity,
           unitPrice: item.price,
           total: item.price * item.quantity,
+          note: item.note || undefined,
         })),
         
         // Totals
@@ -1069,6 +1227,215 @@ export default function CashierSimpleScreen() {
   const received = parseFloat(amountReceived || '0') || 0;
   const change = Math.max(0, received - total);
 
+  // Quick Exact Cash Payment - bypasses state timing issues
+  const handleExactCashPayment = async () => {
+    if (paymentProcessing || cart.length === 0 || total <= 0) return;
+    
+    // Directly process payment with exact amount
+    setPaymentProcessing(true);
+    
+    try {
+      // Validate stock before payment
+      for (const cartItem of cart) {
+        const product = products.find(p => p.id === cartItem.productId);
+        if (product && product.stockQuantity !== undefined && product.stockQuantity >= 0) {
+          if (cartItem.quantity > product.stockQuantity) {
+            Alert.alert(
+              'Stock insuffisant',
+              `${cartItem.productName}: demandé ${cartItem.quantity}, disponible ${product.stockQuantity}`,
+            );
+            setPaymentProcessing(false);
+            return;
+          }
+        }
+      }
+      
+      // If recalling a pending order, delete it first
+      if (currentOrderId) {
+        await offlineOrderService.deleteOrder(currentOrderId);
+      }
+      
+      const orderId = Crypto.randomUUID();
+      const now = new Date();
+      const items: OfflineOrderItem[] = cart.map((item) => ({
+        id: Crypto.randomUUID(),
+        productId: item.productId,
+        productName: item.productName,
+        price: item.price,
+        quantity: item.quantity,
+        note: item.note || undefined,
+      }));
+      
+      const newOrder = await offlineOrderService.create({
+        id: orderId,
+        tableNumber: selectedTable,
+        status: 'PAID',
+        totalAmount: total,
+        paymentMethod: 'cash',
+        discount: 0,
+        discountType: 'amount',
+        amountReceived: total,
+        changeAmount: 0,
+        createdAt: now,
+        paidAt: now,
+        items,
+      });
+      
+      // Deduct stock for all items with stock tracking
+      for (const cartItem of cart) {
+        const product = products.find(p => p.id === cartItem.productId);
+        if (product && product.stockQuantity !== undefined && product.stockQuantity >= 0) {
+          await offlineProductService.adjustStock(cartItem.productId, -cartItem.quantity);
+        }
+      }
+      
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+      
+      // Open cash drawer
+      try {
+        const autoOpenDrawer = await offlineSettingsService.get('auto_open_drawer');
+        const printerConnected = await PrinterService.checkConnection();
+        
+        if (autoOpenDrawer !== 'false' && printerConnected) {
+          await openCashDrawerNative();
+        }
+      } catch (drawerError) {
+        console.error('[CASH_DRAWER] Error:', drawerError);
+      }
+      
+      // Auto-print receipt if enabled
+      try {
+        const autoPrintEnabled = await offlineSettingsService.get('auto_print_receipt');
+        const printerConnected = await PrinterService.checkConnection();
+        
+        if (autoPrintEnabled === 'true' && printerConnected) {
+          await handlePrintReceipt(newOrder);
+        }
+      } catch (printError) {
+        console.error('[AUTO_PRINT] Error:', printError);
+      }
+      
+      // Reset
+      setCart([]);
+      setAmountReceived('');
+      setSelectedTable(0);
+      setCurrentOrderId(null);
+      setShowPaymentModal(false);
+      
+      // Reload data
+      await loadTodayOrders();
+      await loadPendingOrders();
+      await reloadProducts();
+      
+      Alert.alert('Paiement réussi', `${total.toFixed(0)} DH - Montant exact`);
+      
+    } catch (error) {
+      console.error('Exact payment error:', error);
+      Alert.alert('Erreur', 'Erreur lors du paiement');
+    } finally {
+      setPaymentProcessing(false);
+    }
+  };
+
+  // Quick Card Payment - one tap card payment
+  const handleQuickCardPayment = async () => {
+    if (paymentProcessing || cart.length === 0 || total <= 0) return;
+    
+    setPaymentProcessing(true);
+    
+    try {
+      // Validate stock
+      for (const cartItem of cart) {
+        const product = products.find(p => p.id === cartItem.productId);
+        if (product && product.stockQuantity !== undefined && product.stockQuantity >= 0) {
+          if (cartItem.quantity > product.stockQuantity) {
+            Alert.alert(
+              'Stock insuffisant',
+              `${cartItem.productName}: demandé ${cartItem.quantity}, disponible ${product.stockQuantity}`,
+            );
+            setPaymentProcessing(false);
+            return;
+          }
+        }
+      }
+      
+      if (currentOrderId) {
+        await offlineOrderService.deleteOrder(currentOrderId);
+      }
+      
+      const orderId = Crypto.randomUUID();
+      const now = new Date();
+      const items: OfflineOrderItem[] = cart.map((item) => ({
+        id: Crypto.randomUUID(),
+        productId: item.productId,
+        productName: item.productName,
+        price: item.price,
+        quantity: item.quantity,
+        note: item.note || undefined,
+      }));
+      
+      const newOrder = await offlineOrderService.create({
+        id: orderId,
+        tableNumber: selectedTable,
+        status: 'PAID',
+        totalAmount: total,
+        paymentMethod: 'card',
+        discount: 0,
+        discountType: 'amount',
+        amountReceived: total,
+        changeAmount: 0,
+        createdAt: now,
+        paidAt: now,
+        items,
+      });
+      
+      // Deduct stock
+      for (const cartItem of cart) {
+        const product = products.find(p => p.id === cartItem.productId);
+        if (product && product.stockQuantity !== undefined && product.stockQuantity >= 0) {
+          await offlineProductService.adjustStock(cartItem.productId, -cartItem.quantity);
+        }
+      }
+      
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+      
+      // Auto-print receipt
+      try {
+        const autoPrintEnabled = await offlineSettingsService.get('auto_print_receipt');
+        const printerConnected = await PrinterService.checkConnection();
+        
+        if (autoPrintEnabled === 'true' && printerConnected) {
+          await handlePrintReceipt(newOrder);
+        }
+      } catch (printError) {
+        console.error('[AUTO_PRINT] Error:', printError);
+      }
+      
+      // Reset
+      setCart([]);
+      setAmountReceived('');
+      setSelectedTable(0);
+      setCurrentOrderId(null);
+      setShowPaymentModal(false);
+      
+      await loadTodayOrders();
+      await loadPendingOrders();
+      await reloadProducts();
+      
+      Alert.alert('Paiement réussi', `${total.toFixed(0)} DH - Carte`);
+      
+    } catch (error) {
+      console.error('Card payment error:', error);
+      Alert.alert('Erreur', 'Erreur lors du paiement');
+    } finally {
+      setPaymentProcessing(false);
+    }
+  };
+
   // Payment
   const handlePayment = async () => {
     // P0 FIX: Prevent double-click payment
@@ -1127,6 +1494,7 @@ export default function CashierSimpleScreen() {
         productName: item.productName,
         price: item.price,
         quantity: item.quantity,
+        note: item.note || undefined,
       }));
       
       const newOrder = await offlineOrderService.create({
@@ -1218,7 +1586,7 @@ export default function CashierSimpleScreen() {
         ? ` • Monnaie: ${(parseFloat(amountReceived) - total).toFixed(0)} DH` 
         : '';
       Alert.alert(
-        '✅ Paiement réussi', 
+        'Paiement réussi', 
         `${total.toFixed(0)} DH${changeText}`,
         [{ text: 'OK', style: 'default' }],
         { cancelable: true }
@@ -1246,8 +1614,8 @@ export default function CashierSimpleScreen() {
           text: 'Déconnexion',
           style: 'destructive',
           onPress: async () => {
-            // Reset to portrait before leaving
-            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+            // Keep landscape mode
+            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
             logout();
             router.replace('/');
           },
@@ -1297,20 +1665,13 @@ export default function CashierSimpleScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' }}>
-        <View style={{
-          width: 80,
-          height: 80,
-          borderRadius: 16,
-          backgroundColor: 'rgba(255,255,255,0.2)',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: 24,
-        }}>
-          <Coffee size={40} color={colors.white} />
-        </View>
-        <Text style={{ fontSize: 28, fontWeight: '700', color: colors.white, marginBottom: 8 }}>CaissaPro</Text>
-        <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" style={{ marginTop: 16 }} />
+      <SafeAreaView style={{ flex: 1 }}>
+        <MacOSAppLoading
+          appName="CaissaPro"
+          icon={<Coffee size={40} color="#FFFFFF" />}
+          message="Chargement des produits..."
+          accentColor={colors.primary}
+        />
       </SafeAreaView>
     );
   }
@@ -1396,7 +1757,7 @@ export default function CashierSimpleScreen() {
             </TouchableOpacity>
           )}
           {lowStockProducts.length > 0 && (
-            <View style={{ 
+            <View style={{
               backgroundColor: '#FFF3CD',
               paddingHorizontal: 6,
               paddingVertical: 2,
@@ -1405,7 +1766,7 @@ export default function CashierSimpleScreen() {
               borderColor: '#FFE69C',
             }}>
               <Text style={{ fontSize: 10, fontWeight: '500', color: '#856404' }}>
-                ⚠️ {lowStockProducts.length}
+                {lowStockProducts.length}
               </Text>
             </View>
           )}
@@ -1441,7 +1802,7 @@ export default function CashierSimpleScreen() {
                 color: currentSession ? '#FFFFFF' : '#333333', 
                 fontWeight: '400' 
               }}>
-                {currentSession ? '✓ Caisse Ouverte' : 'Ouvrir Caisse'}
+                {currentSession ? 'Caisse Ouverte' : 'Ouvrir Caisse'}
               </Text>
             </TouchableOpacity>
             
@@ -1840,145 +2201,124 @@ export default function CashierSimpleScreen() {
               const hasStockTracking = item.stockQuantity !== undefined && item.stockQuantity >= 0;
               const isOutOfStock = hasStockTracking && item.stockQuantity === 0;
               const isLowStock = hasStockTracking && item.stockQuantity > 0 && item.stockQuantity <= (item.lowStockThreshold || 10);
-              const stockColor = isOutOfStock ? '#FF3B30' : isLowStock ? '#FF9500' : '#4CD964';
+              const stockColor = isOutOfStock ? '#FF3B30' : isLowStock ? '#FF9500' : '#34C759';
               
               return (
-                <TouchableOpacity
+                <AnimatedProductCard
                   onPress={() => addToCart(item)}
-                  activeOpacity={isOutOfStock ? 1 : 0.8}
                   disabled={isOutOfStock}
-                  style={{
-                    width: ui.cardWidth,
-                    height: ui.cardHeight,
-                  }}
+                  width={ui.cardWidth}
+                  height={ui.cardHeight}
                 >
-                  {/* macOS-style card with subtle shadow */}
+                  {/* Admin-style product card */}
                   <View style={{
                     flex: 1,
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 8,
+                    backgroundColor: isOutOfStock ? '#F5F5F5' : '#FFFFFF',
+                    borderRadius: 10,
                     overflow: 'hidden',
                     borderWidth: 1,
-                    borderColor: isLowStock ? '#FF9500' : '#C8C8C8',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 4,
-                    elevation: 2,
+                    borderColor: '#CFCFCF',
+                    opacity: isOutOfStock ? 0.7 : 1,
                   }}>
-                    {/* Product Image Area - 65% of card */}
-                    <View style={{ 
-                      flex: 0.65, 
-                      backgroundColor: isOutOfStock ? '#F5F5F5' : colors.primaryLight,
-                      position: 'relative',
-                    }}>
-                      {item.imageUrl ? (
-                        <Image
-                          source={{ uri: item.imageUrl }}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                          }}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={{ 
-                          flex: 1,
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                        }}>
-                          <Coffee 
-                            size={isPhone ? 32 : 40} 
-                            color={isOutOfStock ? colors.textMuted : colors.primary} 
-                          />
-                        </View>
-                      )}
-                      
-                      {/* Stock Badge - Top Right */}
-                      {hasStockTracking && (
+                    {/* Stock Badge - Top Right */}
+                    {hasStockTracking && (
+                      <View style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        zIndex: 10,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 10,
+                        backgroundColor: stockColor,
+                      }}>
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#FFFFFF' }}>
+                          {isOutOfStock ? 'Épuisé' : item.stockQuantity}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Product Image - Admin style */}
+                    {item.imageUrl ? (
+                      <Image
+                        source={{ uri: item.imageUrl }}
+                        style={{
+                          width: '100%',
+                          height: 100,
+                          backgroundColor: '#F5F5F5',
+                        }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={{ 
+                        width: '100%', 
+                        height: 100, 
+                        backgroundColor: '#E8F8EB', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                      }}>
+                        <Coffee size={36} color="#34C759" />
+                      </View>
+                    )}
+
+                    {/* Out of Stock Overlay */}
+                    {isOutOfStock && (
+                      <View style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 100,
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
                         <View style={{
-                          position: 'absolute',
-                          top: 8,
-                          right: 8,
-                          backgroundColor: stockColor,
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                          borderRadius: 12,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 3,
+                          backgroundColor: colors.danger,
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 4,
                         }}>
-                          {isOutOfStock && <AlertTriangle size={11} color={colors.white} />}
-                          {isLowStock && !isOutOfStock && <TrendingDown size={11} color={colors.white} />}
                           <Text style={{ 
-                            fontSize: 11, 
+                            color: '#FFFFFF', 
                             fontWeight: '700', 
-                            color: colors.white,
+                            fontSize: 11,
                           }}>
-                            {isOutOfStock ? 'Épuisé' : item.stockQuantity}
+                            RUPTURE
                           </Text>
                         </View>
-                      )}
-                      
-                      {/* Out of Stock Overlay */}
-                      {isOutOfStock && (
-                        <View style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          backgroundColor: 'rgba(0,0,0,0.5)',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          <View style={{
-                            backgroundColor: colors.error,
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: 6,
-                          }}>
-                            <Text style={{ 
-                              color: colors.white, 
-                              fontWeight: '800', 
-                              fontSize: 12,
-                              letterSpacing: 0.5,
-                            }}>
-                              RUPTURE
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-                    </View>
+                      </View>
+                    )}
                     
-                    {/* Product Info - 35% of card */}
-                    <View style={{ 
-                      flex: 0.35, 
-                      padding: 10,
-                      justifyContent: 'center',
-                      backgroundColor: isOutOfStock ? '#FAFAFA' : colors.white,
-                    }}>
+                    {/* Product Info - Admin style */}
+                    <View style={{ padding: 10 }}>
                       <Text 
                         style={{ 
-                          fontSize: ui.text.sm, 
+                          fontSize: 13, 
                           fontWeight: '600', 
-                          color: isOutOfStock ? colors.textMuted : colors.textPrimary,
-                          marginBottom: 4,
+                          color: '#1C1C1E',
                         }}
-                        numberOfLines={2}
+                        numberOfLines={1}
                       >
                         {item.name}
                       </Text>
-                      <Text style={{ 
-                        fontSize: ui.text.lg, 
-                        fontWeight: '800', 
-                        color: isOutOfStock ? colors.textMuted : colors.primary,
-                      }}>
-                        {item.price.toFixed(0)} <Text style={{ fontSize: ui.text.sm, fontWeight: '600' }}>DH</Text>
+                      <Text style={{ fontSize: 11, color: '#666666', marginTop: 2 }}>
+                        {item.categoryName || 'Sans catégorie'}
                       </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#34C759' }}>
+                          {item.price.toFixed(0)} DH
+                        </Text>
+                        {isLowStock && !isOutOfStock && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <TrendingDown size={12} color="#FF9500" />
+                            <Text style={{ fontSize: 10, color: '#FF9500', fontWeight: '600' }}>Stock bas</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   </View>
-                </TouchableOpacity>
+                </AnimatedProductCard>
               );
             }}
             ListEmptyComponent={() => (
@@ -1996,8 +2336,7 @@ export default function CashierSimpleScreen() {
             width: ui.cartWidth, 
             backgroundColor: colors.white,
             borderLeftWidth: 1,
-            borderLeftColor: colors.borderLight,
-            ...shadows.sm,
+            borderLeftColor: '#CFCFCF',
           }}>
             {/* Cart Header - macOS Style */}
             <View style={{
@@ -2005,11 +2344,10 @@ export default function CashierSimpleScreen() {
               alignItems: 'center',
               justifyContent: 'space-between',
               paddingHorizontal: 16,
-              paddingVertical: 12,
+              paddingVertical: 10,
               backgroundColor: '#E8E8E8',
               borderBottomWidth: 1,
-              borderBottomColor: '#D0D0D0',
-              minHeight: 56,
+              borderBottomColor: '#CFCFCF',
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <View style={{
@@ -2042,17 +2380,17 @@ export default function CashierSimpleScreen() {
                 <TouchableOpacity 
                   onPress={clearCart} 
                   style={{ 
-                    width: 32,
-                    height: 32,
-                    borderRadius: 6,
-                    backgroundColor: '#FFEBEB',
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: '#FFF5F5',
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 1,
-                    borderColor: '#FFCDD2',
+                    borderColor: '#E0B8B8',
                   }}
                 >
-                  <Trash2 size={16} color="#FF3B30" />
+                  <Trash2 size={16} color="#C62828" />
                 </TouchableOpacity>
               )}
             </View>
@@ -2085,7 +2423,7 @@ export default function CashierSimpleScreen() {
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: ui.text.sm, fontWeight: '600', color: colors.textPrimary }} numberOfLines={1}>
+                          <Text style={{ fontSize: ui.text.sm, fontWeight: '600', color: colors.text }} numberOfLines={1}>
                             {item.productName}
                           </Text>
                           <Text style={{ fontSize: ui.text.sm, color: colors.primary, marginTop: 2 }}>
@@ -2096,8 +2434,8 @@ export default function CashierSimpleScreen() {
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>
                               {isOverStock ? (
                                 <>
-                                  <AlertTriangle size={14} color={colors.error} />
-                                  <Text style={{ fontSize: ui.text.xs, color: colors.error, fontWeight: '600' }}>
+                                  <AlertTriangle size={14} color={colors.danger} />
+                                  <Text style={{ fontSize: ui.text.xs, color: colors.danger, fontWeight: '600' }}>
                                     Stock insuffisant! ({product!.stockQuantity} dispo)
                                   </Text>
                                 </>
@@ -2110,7 +2448,7 @@ export default function CashierSimpleScreen() {
                                 </>
                               ) : (
                                 <Text style={{ fontSize: ui.text.xs, color: colors.success }}>
-                                  ✓ Stock: {product!.stockQuantity}
+                                  Stock: {product!.stockQuantity}
                                 </Text>
                               )}
                             </View>
@@ -2120,17 +2458,17 @@ export default function CashierSimpleScreen() {
                           <TouchableOpacity
                             onPress={() => updateQuantity(item.productId, -1)}
                             style={{
-                              width: 32,
-                              height: 32,
-                              backgroundColor: '#E8E8E8',
-                              borderRadius: 6,
+                              width: 36,
+                              height: 36,
+                              backgroundColor: '#F5F5F5',
+                              borderRadius: 10,
                               alignItems: 'center',
                               justifyContent: 'center',
                               borderWidth: 1,
-                              borderColor: '#D0D0D0',
+                              borderColor: '#CFCFCF',
                             }}
                           >
-                            <Minus size={16} color="#666666" />
+                            <Minus size={16} color="#555555" />
                           </TouchableOpacity>
                           <Text style={{ fontSize: 16, fontWeight: '600', minWidth: 32, textAlign: 'center', color: '#1C1C1E' }}>
                             {item.quantity}
@@ -2138,20 +2476,38 @@ export default function CashierSimpleScreen() {
                           <TouchableOpacity
                             onPress={() => updateQuantity(item.productId, 1)}
                             style={{
-                              width: 32,
-                              height: 32,
-                              backgroundColor: '#007AFF',
-                              borderRadius: 6,
+                              width: 36,
+                              height: 36,
+                              backgroundColor: '#F5F5F5',
+                              borderRadius: 10,
                               alignItems: 'center',
                               justifyContent: 'center',
                               borderWidth: 1,
-                              borderColor: '#006AE6',
+                              borderColor: '#CFCFCF',
                             }}
                           >
-                            <Plus size={16} color="#FFFFFF" />
+                            <Plus size={16} color="#007AFF" />
                           </TouchableOpacity>
                         </View>
                       </View>
+                      
+                      {/* Per-item note input */}
+                      <TextInput
+                        value={item.note || ''}
+                        onChangeText={(text) => updateItemNote(item.productId, text)}
+                        placeholder="📝 Note (sans sucre, bien cuit...)"
+                        placeholderTextColor={colors.textMuted}
+                        style={{
+                          backgroundColor: colors.bgSecondary,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: item.note ? colors.warning : colors.borderLight,
+                          padding: spacing.sm,
+                          marginTop: spacing.sm,
+                          fontSize: fontSize.xs,
+                          color: colors.text,
+                        }}
+                      />
                     </View>
                   );
                 })
@@ -2176,14 +2532,61 @@ export default function CashierSimpleScreen() {
               
               {/* Total */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
-                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>Total</Text>
+                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.text }}>Total</Text>
                 <Text style={{ fontSize: 32, fontWeight: '800', color: colors.primary }}>
                   {total.toFixed(0)} <Text style={{ fontSize: 20, fontWeight: '600' }}>DH</Text>
                 </Text>
               </View>
 
-              {/* Payment Buttons - macOS Style */}
-              <View style={{ flexDirection: 'row', gap: 12 }}>
+              {/* Quick Payment Buttons - One Tap */}
+              {cart.length > 0 && !paymentProcessing && (
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                  {/* Quick Exact Cash - One tap payment */}
+                  <TouchableOpacity
+                    onPress={handleExactCashPayment}
+                    disabled={paymentProcessing}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      backgroundColor: '#E8F5E9',
+                      paddingVertical: 14,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#81C784',
+                    }}
+                  >
+                    <Check size={18} color="#2E7D32" />
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#2E7D32' }}>Exact {total.toFixed(0)}</Text>
+                  </TouchableOpacity>
+                  
+                  {/* Quick Card Payment - One tap */}
+                  <TouchableOpacity
+                    onPress={handleQuickCardPayment}
+                    disabled={paymentProcessing}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      backgroundColor: '#E3F2FD',
+                      paddingVertical: 14,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#90CAF9',
+                    }}
+                  >
+                    <CreditCard size={18} color="#1565C0" />
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#1565C0' }}>Carte</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Detailed Payment - Opens modal for custom amount */}
+              {cart.length > 0 && (
                 <TouchableOpacity
                   onPress={() => {
                     setPaymentMethod('cash');
@@ -2192,102 +2595,43 @@ export default function CashierSimpleScreen() {
                   }}
                   disabled={cart.length === 0}
                   style={{
-                    flex: 1,
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    backgroundColor: cart.length === 0 ? '#D0D0D0' : '#34C759',
-                    paddingVertical: 14,
-                    borderRadius: 6,
-                    minHeight: 48,
+                    backgroundColor: '#F5F5F5',
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    marginBottom: 8,
                     borderWidth: 1,
-                    borderColor: cart.length === 0 ? '#C0C0C0' : '#2DB84D',
+                    borderColor: '#CFCFCF',
                   }}
                 >
-                  <Banknote size={20} color="#FFFFFF" />
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#FFFFFF' }}>Espèces</Text>
+                  <Banknote size={16} color="#666666" />
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#666666' }}>Autre montant espèces...</Text>
                 </TouchableOpacity>
+              )}
+              
+              {/* Hold Button */}
+              {cart.length > 0 && (
                 <TouchableOpacity
-                  onPress={() => {
-                    setPaymentMethod('card');
-                    setAmountReceived(total.toString());
-                    setShowPaymentModal(true);
-                  }}
-                  disabled={cart.length === 0}
+                  onPress={holdOrder}
                   style={{
-                    flex: 1,
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    backgroundColor: cart.length === 0 ? '#D0D0D0' : '#007AFF',
-                    paddingVertical: 14,
-                    borderRadius: 6,
-                    minHeight: 48,
+                    backgroundColor: '#FFF3E0',
+                    paddingVertical: 12,
+                    borderRadius: 10,
                     borderWidth: 1,
-                    borderColor: cart.length === 0 ? '#C0C0C0' : '#006AE6',
+                    borderColor: '#FFCC80',
                   }}
                 >
-                  <CreditCard size={20} color="#FFFFFF" />
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#FFFFFF' }}>Carte</Text>
+                  <Pause size={16} color="#E65100" />
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#E65100' }}>Mettre en attente</Text>
                 </TouchableOpacity>
-              </View>
-
-              {/* Quick Pay & Hold Row - macOS Style */}
-              <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
-                {/* Quick Exact Cash - One tap payment */}
-                {cart.length > 0 && !paymentProcessing && (
-                  <TouchableOpacity
-                    onPress={async () => {
-                      if (paymentProcessing || cart.length === 0 || total <= 0) return;
-                      // Set payment method and amount first, then process
-                      setPaymentMethod('cash');
-                      setAmountReceived(total.toString());
-                      // Use setTimeout to ensure state is updated before payment
-                      setTimeout(() => handlePayment(), 50);
-                    }}
-                    disabled={paymentProcessing}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      backgroundColor: '#E8F8EB',
-                      paddingVertical: 12,
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: '#34C759',
-                    }}
-                  >
-                    <Check size={16} color="#34C759" />
-                    <Text style={{ fontSize: 14, fontWeight: '500', color: '#34C759' }}>Exact {total.toFixed(0)}</Text>
-                  </TouchableOpacity>
-                )}
-                
-                {/* Hold Button */}
-                {cart.length > 0 && (
-                  <TouchableOpacity
-                    onPress={holdOrder}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      backgroundColor: '#FFF4E5',
-                      paddingVertical: 12,
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: '#FF9500',
-                    }}
-                  >
-                    <Pause size={16} color="#FF9500" />
-                    <Text style={{ fontSize: 14, fontWeight: '500', color: '#FF9500' }}>Attente</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              )}
             </View>
           </View>
         )}
@@ -2466,7 +2810,7 @@ export default function CashierSimpleScreen() {
                   }}>
                     <ShoppingCart size={36} color={colors.textMuted} />
                   </View>
-                  <Text style={{ color: colors.textPrimary, fontSize: fontSize.lg, fontWeight: '600' }}>Panier vide</Text>
+                  <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: '600' }}>Panier vide</Text>
                   <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.xs, textAlign: 'center' }}>
                     Appuyez sur un produit pour l'ajouter
                   </Text>
@@ -2492,7 +2836,7 @@ export default function CashierSimpleScreen() {
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }} numberOfLines={1}>
+                          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.text }} numberOfLines={1}>
                             {item.productName}
                           </Text>
                           <Text style={{ fontSize: fontSize.sm, color: colors.primary, marginTop: 2 }}>
@@ -2503,8 +2847,8 @@ export default function CashierSimpleScreen() {
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>
                               {isOverStock ? (
                                 <>
-                                  <AlertTriangle size={14} color={colors.error} />
-                                  <Text style={{ fontSize: fontSize.xs, color: colors.error, fontWeight: '600' }}>
+                                  <AlertTriangle size={14} color={colors.danger} />
+                                  <Text style={{ fontSize: fontSize.xs, color: colors.danger, fontWeight: '600' }}>
                                     Stock insuffisant! ({product!.stockQuantity} dispo)
                                   </Text>
                                 </>
@@ -2517,7 +2861,7 @@ export default function CashierSimpleScreen() {
                                 </>
                               ) : (
                                 <Text style={{ fontSize: fontSize.xs, color: colors.success }}>
-                                  ✓ Stock: {product!.stockQuantity}
+                                  Stock: {product!.stockQuantity}
                                 </Text>
                               )}
                             </View>
@@ -2559,6 +2903,24 @@ export default function CashierSimpleScreen() {
                           </TouchableOpacity>
                         </View>
                       </View>
+                      
+                      {/* Per-item note input for phone */}
+                      <TextInput
+                        value={item.note || ''}
+                        onChangeText={(text) => updateItemNote(item.productId, text)}
+                        placeholder="📝 Note (sans sucre, bien cuit...)"
+                        placeholderTextColor="#999999"
+                        style={{
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: item.note ? '#FFB74D' : '#D0D0D0',
+                          padding: 8,
+                          marginTop: 8,
+                          fontSize: 12,
+                          color: '#1C1C1E',
+                        }}
+                      />
                     </View>
                   );
                 })
@@ -2568,11 +2930,62 @@ export default function CashierSimpleScreen() {
             {/* Cart Footer - macOS Style */}
             <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#D0D0D0', backgroundColor: '#F9F9F9' }}>
               {/* Total */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <Text style={{ fontSize: 18, fontWeight: '600', color: '#1C1C1E' }}>Total</Text>
                 <Text style={{ fontSize: 28, fontWeight: '700', color: '#007AFF' }}>{total.toFixed(0)} DH</Text>
               </View>
-              {/* Payment Buttons */}
+              
+              {/* Quick Payment Row - Exact Cash & Quick Card */}
+              {cart.length > 0 && !paymentProcessing && (
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowCartModal(false);
+                      handleExactCashPayment();
+                    }}
+                    disabled={paymentProcessing}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      backgroundColor: '#E8F5E9',
+                      paddingVertical: 14,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: '#81C784',
+                    }}
+                  >
+                    <Check size={18} color="#2E7D32" />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#2E7D32' }}>Exact {total.toFixed(0)}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowCartModal(false);
+                      handleQuickCardPayment();
+                    }}
+                    disabled={paymentProcessing}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      backgroundColor: '#E3F2FD',
+                      paddingVertical: 14,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: '#90CAF9',
+                    }}
+                  >
+                    <CreditCard size={18} color="#1565C0" />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1565C0' }}>Carte</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              {/* Detailed Payment Buttons */}
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <TouchableOpacity
                   onPress={() => {
@@ -2588,15 +3001,15 @@ export default function CashierSimpleScreen() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    backgroundColor: cart.length === 0 ? '#D0D0D0' : '#34C759',
-                    paddingVertical: 14,
+                    backgroundColor: cart.length === 0 ? '#D0D0D0' : '#F5F5F5',
+                    paddingVertical: 12,
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor: cart.length === 0 ? '#C0C0C0' : '#2DB84D',
+                    borderColor: '#CFCFCF',
                   }}
                 >
-                  <Banknote size={20} color="#FFFFFF" />
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>Cash</Text>
+                  <Banknote size={18} color={cart.length === 0 ? '#999999' : '#2E7D32'} />
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: cart.length === 0 ? '#999999' : '#2E7D32' }}>Espèces...</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
@@ -2612,15 +3025,15 @@ export default function CashierSimpleScreen() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    backgroundColor: cart.length === 0 ? '#D0D0D0' : '#007AFF',
-                    paddingVertical: 14,
+                    backgroundColor: cart.length === 0 ? '#D0D0D0' : '#F5F5F5',
+                    paddingVertical: 12,
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor: cart.length === 0 ? '#C0C0C0' : '#006AE6',
+                    borderColor: '#CFCFCF',
                   }}
                 >
-                  <CreditCard size={20} color="#FFFFFF" />
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>Carte</Text>
+                  <CreditCard size={18} color={cart.length === 0 ? '#999999' : '#1565C0'} />
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: cart.length === 0 ? '#999999' : '#1565C0' }}>Carte...</Text>
                 </TouchableOpacity>
               </View>
 
@@ -2636,16 +3049,16 @@ export default function CashierSimpleScreen() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    backgroundColor: '#FFF4E5',
+                    backgroundColor: '#FFF3E0',
                     paddingVertical: 12,
-                    borderRadius: 6,
+                    borderRadius: 8,
                     marginTop: 12,
                     borderWidth: 1,
-                    borderColor: '#FF9500',
+                    borderColor: '#FFCC80',
                   }}
                 >
-                  <Pause size={16} color="#FF9500" />
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#FF9500' }}>Mettre en attente</Text>
+                  <Pause size={16} color="#E65100" />
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#E65100' }}>Mettre en attente</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -2673,10 +3086,12 @@ export default function CashierSimpleScreen() {
               style={{ width: '100%', maxWidth: 400 }}
             >
               <View style={{
-                backgroundColor: colors.white,
-                borderRadius: 8,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 12,
                 width: '100%',
                 overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: '#CFCFCF',
               }}>
             {/* Modal Header - macOS Style */}
             <View style={{
@@ -2711,32 +3126,37 @@ export default function CashierSimpleScreen() {
               <TouchableOpacity 
                 onPress={() => setShowPaymentModal(false)}
                 style={{
-                  width: 32,
-                  height: 32,
+                  width: 28,
+                  height: 28,
                   borderRadius: 6,
-                  backgroundColor: '#E8E8E8',
+                  backgroundColor: '#FFFFFF',
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderWidth: 1,
-                  borderColor: '#C8C8C8',
+                  borderColor: '#CFCFCF',
                 }}
               >
-                <X size={18} color="#666666" />
+                <X size={16} color="#666666" />
               </TouchableOpacity>
             </View>
 
-            <View style={{ padding: 24 }}>
+            <View style={{ padding: 20 }}>
               {/* Total */}
               <View style={{
-                backgroundColor: '#F8F9FA',
-                borderRadius: 8,
-                padding: 24,
+                backgroundColor: '#F8F8F8',
+                borderRadius: 10,
+                padding: 20,
                 alignItems: 'center',
-                marginBottom: 24,
+                marginBottom: 20,
+                borderWidth: 1,
+                borderColor: '#E8E8E8',
               }}>
-                <Text style={{ fontSize: 14, color: '#6B7280', marginBottom: 8 }}>💰 À payer</Text>
-                <Text style={{ fontSize: 40, fontWeight: '700', color: '#111827' }}>
-                  {Math.round(total)} DH
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <Wallet size={16} color="#8E8E93" />
+                  <Text style={{ fontSize: 14, color: '#8E8E93', fontWeight: '500' }}>À payer</Text>
+                </View>
+                <Text style={{ fontSize: 36, fontWeight: '700', color: '#1C1C1E' }}>
+                  {Math.round(total)} <Text style={{ fontSize: 20, fontWeight: '600' }}>DH</Text>
                 </Text>
               </View>
 
@@ -2744,46 +3164,47 @@ export default function CashierSimpleScreen() {
               {paymentMethod === 'cash' && (
                 <>
                   {/* Amount received */}
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#1C1C1E', marginBottom: 8 }}>
                     Montant reçu
                   </Text>
                   <TextInput
                     style={{
-                      backgroundColor: '#F9FAFB',
+                      backgroundColor: '#FFFFFF',
                       borderWidth: 1,
-                      borderColor: '#E5E7EB',
-                      borderRadius: 10,
+                      borderColor: '#CFCFCF',
+                      borderRadius: 8,
                       paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      fontSize: 20,
-                      fontWeight: '700',
+                      paddingVertical: 12,
+                      fontSize: 18,
+                      fontWeight: '600',
                       textAlign: 'center',
                       marginBottom: 12,
+                      color: '#1C1C1E',
                     }}
                     value={amountReceived}
                     onChangeText={setAmountReceived}
                     keyboardType="numeric"
                     placeholder="0.00"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor="#C7C7CC"
                   />
 
                   {/* Quick amounts */}
-                  <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
                     {quickAmounts.map(amt => (
                       <TouchableOpacity
                         key={amt}
                         onPress={() => setAmountReceived(amt.toString())}
                         style={{
                           flex: 1,
-                          backgroundColor: '#F8F9FA',
-                          paddingVertical: 14,
-                          borderRadius: 6,
+                          backgroundColor: '#FFFFFF',
+                          paddingVertical: 12,
+                          borderRadius: 8,
                           alignItems: 'center',
                           borderWidth: 1,
-                          borderColor: '#E5E7EB',
+                          borderColor: '#CFCFCF',
                         }}
                       >
-                        <Text style={{ fontSize: 16, fontWeight: '600', color: '#374151' }}>
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#1C1C1E' }}>
                           {amt}
                         </Text>
                       </TouchableOpacity>
@@ -2792,14 +3213,16 @@ export default function CashierSimpleScreen() {
                       onPress={() => setAmountReceived(Math.ceil(total).toString())}
                       style={{
                         flex: 1,
-                        backgroundColor: '#10B981',
-                        paddingVertical: 14,
-                        borderRadius: 6,
+                        backgroundColor: '#34C759',
+                        paddingVertical: 12,
+                        borderRadius: 8,
                         alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: '#2DB84D',
                       }}
                     >
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>
-                        ✓ Exact
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#FFFFFF' }}>
+                        Exact
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -2807,16 +3230,18 @@ export default function CashierSimpleScreen() {
                   {/* Change */}
                   {received >= total && (
                     <View style={{
-                      backgroundColor: '#FEF3C7',
-                      borderRadius: 10,
+                      backgroundColor: '#FFF9E6',
+                      borderRadius: 8,
                       padding: 12,
                       flexDirection: 'row',
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       marginBottom: 16,
+                      borderWidth: 1,
+                      borderColor: '#FFD60A',
                     }}>
-                      <Text style={{ fontSize: 14, color: '#92400E' }}>Monnaie à rendre</Text>
-                      <Text style={{ fontSize: 20, fontWeight: '700', color: '#92400E' }}>
+                      <Text style={{ fontSize: 14, color: '#996B00', fontWeight: '500' }}>Monnaie à rendre</Text>
+                      <Text style={{ fontSize: 18, fontWeight: '700', color: '#996B00' }}>
                         {change.toFixed(0)} DH
                       </Text>
                     </View>
@@ -2824,24 +3249,30 @@ export default function CashierSimpleScreen() {
                 </>
               )}
 
-              {/* Confirm Button - P0 FIX: Added paymentProcessing guard */}
+              {/* Confirm Button - macOS Style */}
               <TouchableOpacity
                 onPress={handlePayment}
                 disabled={paymentProcessing || (paymentMethod === 'cash' && received < total)}
                 style={{
-                  backgroundColor: paymentProcessing || (paymentMethod === 'cash' && received < total) ? '#D1D5DB' : '#007AFF',
-                  paddingVertical: 18,
-                  borderRadius: 6,
+                  backgroundColor: paymentProcessing || (paymentMethod === 'cash' && received < total) ? '#E8E8E8' : '#007AFF',
+                  paddingVertical: 14,
+                  borderRadius: 8,
                   alignItems: 'center',
                   flexDirection: 'row',
                   justifyContent: 'center',
                   gap: 8,
+                  borderWidth: 1,
+                  borderColor: paymentProcessing || (paymentMethod === 'cash' && received < total) ? '#CFCFCF' : '#006AE6',
                 }}
               >
                 {paymentProcessing && (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 )}
-                <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF' }}>
+                <Text style={{ 
+                  fontSize: 15, 
+                  fontWeight: '600', 
+                  color: paymentProcessing || (paymentMethod === 'cash' && received < total) ? '#999999' : '#FFFFFF' 
+                }}>
                   {paymentProcessing ? 'Traitement...' : 'Confirmer le paiement'}
                 </Text>
               </TouchableOpacity>
@@ -3027,30 +3458,31 @@ export default function CashierSimpleScreen() {
           </View>
           
           {/* Orders Grid Content */}
-          <View style={{ flex: 1, backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-            {/* 🔍 Search Bar */}
+          <View style={{ flex: 1, backgroundColor: '#EDEDED' }}>
+            {/* Search Bar - macOS style */}
             <View style={{ 
               flexDirection: 'row', 
               alignItems: 'center',
-              backgroundColor: colors.white,
+              backgroundColor: '#FFFFFF',
               marginHorizontal: spacing.lg,
               marginTop: spacing.lg,
               marginBottom: spacing.sm,
-              borderRadius: borderRadius.lg,
+              borderRadius: 8,
               paddingHorizontal: spacing.md,
-              ...shadows.sm,
+              borderWidth: 1,
+              borderColor: '#CFCFCF',
             }}>
-              <Search size={20} color={colors.textMuted} />
+              <Search size={18} color="#8E8E93" />
               <TextInput
                 style={{
                   flex: 1,
-                  paddingVertical: spacing.md,
+                  paddingVertical: 10,
                   paddingHorizontal: spacing.sm,
-                  fontSize: fontSize.md,
-                  color: colors.textPrimary,
+                  fontSize: 14,
+                  color: '#1C1C1E',
                 }}
                 placeholder="Rechercher par n° commande, table ou montant..."
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor="#C7C7CC"
                 value={ordersSearchQuery}
                 onChangeText={setOrdersSearchQuery}
                 autoCapitalize="none"
@@ -3058,7 +3490,7 @@ export default function CashierSimpleScreen() {
               />
               {ordersSearchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => setOrdersSearchQuery('')}>
-                  <X size={20} color={colors.textMuted} />
+                  <X size={18} color="#8E8E93" />
                 </TouchableOpacity>
               )}
             </View>
@@ -3097,68 +3529,73 @@ export default function CashierSimpleScreen() {
               renderItem={({ item }) => (
                 <View style={{
                   flex: 1,
-                  backgroundColor: colors.white,
-                  borderRadius: 8,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 10,
                   overflow: 'hidden',
-                  ...shadows.md,
+                  borderWidth: 1,
+                  borderColor: '#CFCFCF',
                 }}>
                   {/* Order Header */}
                   <View style={{ 
                     flexDirection: 'row', 
                     alignItems: 'center', 
                     justifyContent: 'space-between',
-                    padding: spacing.lg,
-                    backgroundColor: item.status === 'PAID' ? colors.successLight : colors.warningLight,
+                    padding: spacing.md,
+                    backgroundColor: item.status === 'PAID' ? '#E8F8EB' : '#FFF4E5',
+                    borderBottomWidth: 1,
+                    borderBottomColor: item.status === 'PAID' ? '#C8E6C9' : '#FFE0B2',
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                       <View style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
-                        backgroundColor: colors.white,
+                        width: 40,
+                        height: 40,
+                        borderRadius: 8,
+                        backgroundColor: '#FFFFFF',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: item.status === 'PAID' ? '#81C784' : '#FFB74D',
                       }}>
                         <Text style={{ 
-                          fontSize: fontSize.lg, 
-                          fontWeight: '800', 
-                          color: item.status === 'PAID' ? colors.success : colors.warning 
+                          fontSize: 15, 
+                          fontWeight: '700', 
+                          color: item.status === 'PAID' ? '#2E7D32' : '#F57C00' 
                         }}>
                           {item.orderNumber || '-'}
                         </Text>
                       </View>
                       <View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           {item.tableNumber === 0 ? (
-                            <Coffee size={16} color={colors.textSecondary} />
+                            <Coffee size={14} color="#666666" />
                           ) : (
-                            <Users size={16} color={colors.textSecondary} />
+                            <Users size={14} color="#666666" />
                           )}
-                          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1C1C1E' }}>
                             {item.tableNumber === 0 ? 'Comptoir' : `Table ${item.tableNumber}`}
                           </Text>
                         </View>
-                        <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 }}>
+                        <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
                           {item.createdAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </Text>
                       </View>
                     </View>
                     {item.status === 'PAID' ? (
-                      <CheckCircle size={24} color={colors.success} />
+                      <CheckCircle size={22} color="#34C759" />
                     ) : (
-                      <Clock size={24} color={colors.warning} />
+                      <Clock size={22} color="#FF9500" />
                     )}
                   </View>
                   
                   {/* Order Details */}
-                  <View style={{ padding: spacing.lg }}>
+                  <View style={{ padding: spacing.md }}>
                     {/* Amount */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: spacing.md }}>
-                      <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: spacing.sm }}>
+                      <Text style={{ fontSize: 13, color: '#666666' }}>
                         {item.items.reduce((s, i) => s + i.quantity, 0)} article{item.items.reduce((s, i) => s + i.quantity, 0) > 1 ? 's' : ''}
                       </Text>
-                      <Text style={{ fontSize: 28, fontWeight: '800', color: colors.textPrimary }}>
-                        {Math.round(item.totalAmount)} <Text style={{ fontSize: fontSize.md, fontWeight: '600' }}>DH</Text>
+                      <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1E' }}>
+                        {Math.round(item.totalAmount)} <Text style={{ fontSize: 14, fontWeight: '600' }}>DH</Text>
                       </Text>
                     </View>
                     
@@ -3168,26 +3605,28 @@ export default function CashierSimpleScreen() {
                         flexDirection: 'row', 
                         alignItems: 'center', 
                         gap: spacing.sm,
-                        marginBottom: spacing.md,
+                        marginBottom: spacing.sm,
                       }}>
                         <View style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          gap: spacing.xs,
-                          backgroundColor: item.paymentMethod === 'cash' ? colors.successLight : colors.primaryLight,
-                          paddingHorizontal: spacing.md,
-                          paddingVertical: spacing.xs,
-                          borderRadius: 10,
+                          gap: 4,
+                          backgroundColor: item.paymentMethod === 'cash' ? '#E8F8EB' : '#E5F1FF',
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: item.paymentMethod === 'cash' ? '#C8E6C9' : '#90CAF9',
                         }}>
                           {item.paymentMethod === 'cash' ? (
-                            <Banknote size={14} color={colors.success} />
+                            <Banknote size={13} color="#2E7D32" />
                           ) : (
-                            <CreditCard size={14} color={colors.primary} />
+                            <CreditCard size={13} color="#1565C0" />
                           )}
                           <Text style={{ 
-                            fontSize: fontSize.xs, 
+                            fontSize: 12, 
                             fontWeight: '600', 
-                            color: item.paymentMethod === 'cash' ? colors.success : colors.primary 
+                            color: item.paymentMethod === 'cash' ? '#2E7D32' : '#1565C0' 
                           }}>
                             {item.paymentMethod === 'cash' ? 'Espèces' : 'Carte'}
                           </Text>
@@ -3196,25 +3635,27 @@ export default function CashierSimpleScreen() {
                           <View style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            gap: spacing.xs,
-                            backgroundColor: colors.background,
-                            paddingHorizontal: spacing.md,
-                            paddingVertical: spacing.xs,
-                            borderRadius: 10,
+                            gap: 4,
+                            backgroundColor: '#F5F5F5',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: '#E0E0E0',
                           }}>
-                            <Printer size={14} color={colors.textMuted} />
-                            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>Imprimé</Text>
+                            <Printer size={13} color="#8E8E93" />
+                            <Text style={{ fontSize: 12, color: '#8E8E93' }}>Imprimé</Text>
                           </View>
                         )}
                       </View>
                     )}
                   </View>
                   
-                  {/* Action Buttons - Large for easy tapping */}
+                  {/* Action Buttons - macOS Style */}
                   <View style={{ 
                     flexDirection: 'row', 
                     borderTopWidth: 1, 
-                    borderTopColor: colors.borderLight,
+                    borderTopColor: '#E8E8E8',
                   }}>
                     {/* View Button */}
                     <TouchableOpacity
@@ -3227,16 +3668,17 @@ export default function CashierSimpleScreen() {
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: spacing.sm,
-                        paddingVertical: spacing.lg,
-                        minHeight: 56,
+                        gap: 6,
+                        paddingVertical: 12,
+                        minHeight: 48,
+                        backgroundColor: '#FAFAFA',
                       }}
                     >
-                      <Eye size={20} color={colors.primary} />
-                      <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.primary }}>Détails</Text>
+                      <Eye size={18} color="#007AFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#007AFF' }}>Détails</Text>
                     </TouchableOpacity>
                     
-                    <View style={{ width: 1, backgroundColor: colors.borderLight }} />
+                    <View style={{ width: 1, backgroundColor: '#E8E8E8' }} />
                     
                     {/* Print Button - Admin Only */}
                     {hasPermission(user?.role as UserRole, 'print_daily_report') ? (
@@ -3248,17 +3690,17 @@ export default function CashierSimpleScreen() {
                           flexDirection: 'row',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: spacing.sm,
-                          paddingVertical: spacing.lg,
-                          minHeight: 56,
-                          backgroundColor: item.printed ? colors.background : colors.successLight,
+                          gap: 6,
+                          paddingVertical: 12,
+                          minHeight: 48,
+                          backgroundColor: item.printed ? '#FAFAFA' : '#E8F8EB',
                         }}
                       >
-                        <Printer size={20} color={item.printed ? colors.textMuted : colors.success} />
+                        <Printer size={18} color={item.printed ? '#8E8E93' : '#34C759'} />
                         <Text style={{ 
-                          fontSize: fontSize.md, 
+                          fontSize: 14, 
                           fontWeight: '600', 
-                          color: item.printed ? colors.textMuted : colors.success 
+                          color: item.printed ? '#8E8E93' : '#34C759' 
                         }}>
                           {item.printed ? 'Réimpr.' : 'Imprimer'}
                         </Text>
@@ -3270,20 +3712,20 @@ export default function CashierSimpleScreen() {
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: spacing.sm,
-                        paddingVertical: spacing.lg,
-                        minHeight: 56,
-                        backgroundColor: colors.background,
+                        gap: 6,
+                        paddingVertical: 12,
+                        minHeight: 48,
+                        backgroundColor: '#F5F5F5',
                       }}>
-                        <Lock size={18} color={colors.textMuted} />
-                        <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>Admin</Text>
+                        <Lock size={16} color="#C7C7CC" />
+                        <Text style={{ fontSize: 13, color: '#C7C7CC' }}>Admin</Text>
                       </View>
                     )}
                     
                     {/* Resume Button for Pending Orders */}
                     {item.status === 'PENDING' && (
                       <>
-                        <View style={{ width: 1, backgroundColor: colors.borderLight }} />
+                        <View style={{ width: 1, backgroundColor: '#E8E8E8' }} />
                         <TouchableOpacity
                           onPress={() => {
                             recallOrder(item);
@@ -3294,14 +3736,14 @@ export default function CashierSimpleScreen() {
                             flexDirection: 'row',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: spacing.sm,
-                            paddingVertical: spacing.lg,
-                            minHeight: 56,
-                            backgroundColor: colors.warningLight,
+                            gap: 6,
+                            paddingVertical: 12,
+                            minHeight: 48,
+                            backgroundColor: '#FFF4E5',
                           }}
                         >
-                          <Play size={20} color={colors.warning} />
-                          <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: '#B45309' }}>Reprendre</Text>
+                          <Play size={18} color="#FF9500" />
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#F57C00' }}>Reprendre</Text>
                         </TouchableOpacity>
                       </>
                     )}
@@ -3316,20 +3758,22 @@ export default function CashierSimpleScreen() {
                   justifyContent: 'center',
                 }}>
                   <View style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: 40,
-                    backgroundColor: colors.borderLight,
+                    width: 72,
+                    height: 72,
+                    borderRadius: 16,
+                    backgroundColor: '#F5F5F5',
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginBottom: spacing.lg,
+                    borderWidth: 1,
+                    borderColor: '#E8E8E8',
                   }}>
-                    <ClipboardList size={36} color={colors.textMuted} />
+                    <ClipboardList size={32} color="#C7C7CC" />
                   </View>
-                  <Text style={{ fontSize: fontSize.lg, fontWeight: '600', color: colors.textPrimary }}>
+                  <Text style={{ fontSize: 17, fontWeight: '600', color: '#1C1C1E' }}>
                     Aucune commande
                   </Text>
-                  <Text style={{ fontSize: fontSize.md, color: colors.textMuted, marginTop: spacing.xs }}>
+                  <Text style={{ fontSize: 14, color: '#8E8E93', marginTop: 4 }}>
                     Les commandes apparaîtront ici
                   </Text>
                 </View>
@@ -3464,34 +3908,49 @@ export default function CashierSimpleScreen() {
                     <View 
                       key={index} 
                       style={{ 
-                        flexDirection: 'row', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center',
                         paddingVertical: isPhone ? 12 : 16,
                         borderBottomWidth: index < selectedOrderForReceipt.items.length - 1 ? 1 : 0,
                         borderBottomColor: '#F0F2F5',
                       }}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: isPhone ? 10 : 14, flex: 1 }}>
-                        <View style={{
-                          width: isPhone ? 26 : 34,
-                          height: isPhone ? 26 : 34,
-                          borderRadius: 8,
-                          backgroundColor: '#F0F2F5',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          <Text style={{ fontSize: ui.text.sm, fontWeight: '700', color: '#1C1E21' }}>
-                            {item.quantity}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: isPhone ? 10 : 14, flex: 1 }}>
+                          <View style={{
+                            width: isPhone ? 26 : 34,
+                            height: isPhone ? 26 : 34,
+                            borderRadius: 8,
+                            backgroundColor: '#F0F2F5',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                            <Text style={{ fontSize: ui.text.sm, fontWeight: '700', color: '#1C1E21' }}>
+                              {item.quantity}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: ui.text.md, color: '#1C1E21', flex: 1 }} numberOfLines={1}>
+                            {item.productName}
                           </Text>
                         </View>
-                        <Text style={{ fontSize: ui.text.md, color: '#1C1E21', flex: 1 }} numberOfLines={1}>
-                          {item.productName}
+                        <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: '#1C1E21' }}>
+                          {(item.quantity * item.price).toFixed(0)} DH
                         </Text>
                       </View>
-                      <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: '#1C1E21' }}>
-                        {(item.quantity * item.price).toFixed(0)} DH
-                      </Text>
+                      
+                      {/* Item Note (if any) */}
+                      {item.note && item.note.trim() && (
+                        <View style={{ 
+                          flexDirection: 'row', 
+                          alignItems: 'center', 
+                          gap: 6, 
+                          marginTop: 6, 
+                          marginLeft: isPhone ? 36 : 48,
+                        }}>
+                          <Text style={{ fontSize: ui.text.xs, color: '#B8860B' }}>📝</Text>
+                          <Text style={{ fontSize: ui.text.xs, color: '#8B7355', fontStyle: 'italic' }}>
+                            {item.note}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   ))}
                 </View>
@@ -3622,7 +4081,7 @@ export default function CashierSimpleScreen() {
               }}>
                 <Users size={18} color="#FFFFFF" />
               </View>
-              <Text style={{ fontSize: ui.text.xl, fontWeight: '600', color: colors.textPrimary }}>Choisir Table</Text>
+              <Text style={{ fontSize: ui.text.xl, fontWeight: '600', color: colors.text }}>Choisir Table</Text>
             </View>
             <TouchableOpacity
               onPress={() => setShowTableModal(false)}
@@ -3678,7 +4137,7 @@ export default function CashierSimpleScreen() {
                 <Text style={{ 
                   fontSize: isPhone ? 15 : 16, 
                   fontWeight: '600', 
-                  color: selectedTable === 0 ? '#FFFFFF' : colors.textPrimary 
+                  color: selectedTable === 0 ? '#FFFFFF' : colors.text 
                 }}>
                   Comptoir
                 </Text>
@@ -3735,7 +4194,7 @@ export default function CashierSimpleScreen() {
                   <Text style={{ 
                     fontSize: isPhone ? 20 : 24, 
                     fontWeight: '700', 
-                    color: selectedTable === table ? '#FFFFFF' : colors.textPrimary 
+                    color: selectedTable === table ? '#FFFFFF' : colors.text 
                   }}>
                     {table}
                   </Text>
@@ -3753,73 +4212,87 @@ export default function CashierSimpleScreen() {
         </View>
       </Modal>
 
-      {/* Pending Orders Modal */}
+      {/* Pending Orders Modal - macOS Design */}
       <Modal
         visible={showPendingModal}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setShowPendingModal(false)}
       >
         <View style={{
           flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.4)',
+          backgroundColor: 'rgba(0,0,0,0.35)',
           justifyContent: 'center',
           alignItems: 'center',
-          padding: isPhone ? 20 : 32,
+          padding: isPhone ? 16 : 40,
         }}>
           <View style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 8,
+            backgroundColor: '#F5F5F7',
+            borderRadius: 12,
             width: '100%',
-            maxWidth: isLargeTablet ? 700 : 500,
-            maxHeight: '85%',
+            maxWidth: isLargeTablet ? 680 : 520,
+            maxHeight: '90%',
             overflow: 'hidden',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.25,
+            shadowRadius: 24,
+            elevation: 12,
           }}>
-            {/* macOS style header */}
+            {/* macOS Unified Header */}
             <View style={{
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
-              padding: isPhone ? 16 : 20,
-              backgroundColor: '#E8E8E8',
+              paddingHorizontal: isPhone ? 16 : 20,
+              paddingVertical: isPhone ? 14 : 16,
+              backgroundColor: '#FFFFFF',
               borderBottomWidth: 1,
-              borderBottomColor: '#D0D0D0',
+              borderBottomColor: 'rgba(0,0,0,0.08)',
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#FFF4E5', alignItems: 'center', justifyContent: 'center' }}>
-                  <Pause size={20} color="#FF9500" />
+                <View style={{ 
+                  width: 38, 
+                  height: 38, 
+                  borderRadius: 10, 
+                  backgroundColor: '#FFF2E0', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,149,0,0.2)',
+                }}>
+                  <Pause size={18} color="#FF9500" />
                 </View>
                 <View>
-                  <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: '#333333' }}>
+                  <Text style={{ fontSize: isPhone ? 17 : 18, fontWeight: '600', color: '#1D1D1F', letterSpacing: -0.3 }}>
                     En attente
                   </Text>
-                  <Text style={{ fontSize: ui.text.sm, color: '#666666' }}>
-                    {pendingOrders.length} commande(s)
+                  <Text style={{ fontSize: isPhone ? 12 : 13, color: '#86868B', marginTop: 1 }}>
+                    {pendingOrders.length} commande{pendingOrders.length > 1 ? 's' : ''}
                   </Text>
                 </View>
               </View>
               <TouchableOpacity 
                 onPress={() => setShowPendingModal(false)}
                 style={{ 
-                  width: 32, 
-                  height: 32, 
-                  borderRadius: 6,
-                  backgroundColor: '#E8E8E8',
-                  borderWidth: 1,
-                  borderColor: '#C8C8C8',
+                  width: 28, 
+                  height: 28, 
+                  borderRadius: 14,
+                  backgroundColor: 'rgba(0,0,0,0.06)',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <X size={16} color="#666666" />
+                <X size={14} color="#86868B" strokeWidth={2.5} />
               </TouchableOpacity>
             </View>
 
             <FlatList
               data={pendingOrders}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={{ padding: isPhone ? 16 : 24 }}
-              ItemSeparatorComponent={() => <View style={{ height: isPhone ? 12 : 16 }} />}
+              contentContainerStyle={{ padding: isPhone ? 12 : 16 }}
+              ItemSeparatorComponent={() => <View style={{ height: isPhone ? 10 : 12 }} />}
+              showsVerticalScrollIndicator={false}
               renderItem={({ item }) => {
                 // Calculate time elapsed since order was created
                 const createdAt = new Date(item.createdAt);
@@ -3832,71 +4305,103 @@ export default function CashierSimpleScreen() {
                 
                 return (
                 <View style={{
-                  backgroundColor: isUrgent ? '#FEE2E2' : '#FEF3C7',
-                  borderRadius: 8,
-                  padding: isPhone ? 14 : 18,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 10,
+                  padding: isPhone ? 14 : 16,
                   borderWidth: 1,
-                  borderColor: isUrgent ? '#EF4444' : '#FCD34D',
+                  borderColor: 'rgba(0,0,0,0.08)',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.04,
+                  shadowRadius: 3,
+                  // Left accent border
+                  borderLeftWidth: 4,
+                  borderLeftColor: isUrgent ? '#FF453A' : '#FF9F0A',
                 }}>
+                  {/* Order Header */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: isPhone ? 10 : 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: isPhone ? 8 : 10, flexWrap: 'wrap' }}>
+                      {/* Order Number Badge */}
                       <View style={{
-                        backgroundColor: '#F59E0B',
-                        paddingHorizontal: isPhone ? 12 : 16,
-                        paddingVertical: isPhone ? 6 : 8,
+                        backgroundColor: isUrgent ? '#FF453A' : '#FF9F0A',
+                        paddingHorizontal: isPhone ? 10 : 12,
+                        paddingVertical: isPhone ? 5 : 6,
                         borderRadius: 6,
                       }}>
-                        <Text style={{ fontSize: ui.text.md, fontWeight: '700', color: '#FFFFFF' }}>
+                        <Text style={{ fontSize: isPhone ? 13 : 14, fontWeight: '700', color: '#FFFFFF' }}>
                           #{item.orderNumber}
                         </Text>
                       </View>
+                      {/* Table Badge */}
                       <View style={{
-                        backgroundColor: '#FFFFFF',
-                        paddingHorizontal: isPhone ? 10 : 14,
-                        paddingVertical: isPhone ? 4 : 6,
+                        backgroundColor: '#F5F5F7',
+                        paddingHorizontal: isPhone ? 10 : 12,
+                        paddingVertical: isPhone ? 5 : 6,
                         borderRadius: 6,
                         borderWidth: 1,
-                        borderColor: '#E5E7EB',
+                        borderColor: 'rgba(0,0,0,0.06)',
                       }}>
-                        <Text style={{ fontSize: ui.text.sm, fontWeight: '600', color: '#92400E' }}>
+                        <Text style={{ fontSize: isPhone ? 12 : 13, fontWeight: '600', color: '#1D1D1F' }}>
                           {item.tableNumber === 0 ? 'Comptoir' : `Table ${item.tableNumber}`}
                         </Text>
                       </View>
-                      {/* Time elapsed indicator */}
+                      {/* Time Badge */}
                       <View style={{
-                        backgroundColor: isUrgent ? '#EF4444' : '#FCD34D',
-                        paddingHorizontal: isPhone ? 8 : 12,
-                        paddingVertical: isPhone ? 4 : 6,
-                        borderRadius: 6,
+                        backgroundColor: isUrgent ? '#FFEBE9' : '#FFF4E5',
+                        paddingHorizontal: isPhone ? 8 : 10,
+                        paddingVertical: isPhone ? 4 : 5,
+                        borderRadius: 5,
                       }}>
-                        <Text style={{ fontSize: ui.text.xs, fontWeight: '700', color: isUrgent ? '#FFFFFF' : '#78350F' }}>
+                        <Text style={{ 
+                          fontSize: isPhone ? 11 : 12, 
+                          fontWeight: '600', 
+                          color: isUrgent ? '#FF453A' : '#C77800',
+                        }}>
                           {timeDisplay}
                         </Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: ui.text.xl, fontWeight: '700', color: '#92400E' }}>
-                      {Math.round(item.totalAmount)} DH
+                    {/* Total Amount */}
+                    <Text style={{ 
+                      fontSize: isPhone ? 20 : 22, 
+                      fontWeight: '700', 
+                      color: '#1D1D1F',
+                      letterSpacing: -0.5,
+                    }}>
+                      {Math.round(item.totalAmount)} <Text style={{ fontSize: isPhone ? 14 : 15, fontWeight: '600', color: '#86868B' }}>DH</Text>
                     </Text>
                   </View>
                   
-                  {/* Items preview */}
-                  <View style={{ marginTop: isPhone ? 10 : 14 }}>
+                  {/* Items List */}
+                  <View style={{ 
+                    marginTop: isPhone ? 12 : 14, 
+                    paddingTop: isPhone ? 12 : 14,
+                    borderTopWidth: 1,
+                    borderTopColor: 'rgba(0,0,0,0.05)',
+                  }}>
                     {item.items.slice(0, 3).map((orderItem, idx) => (
-                      <Text key={idx} style={{ fontSize: ui.text.sm, color: '#78350F', lineHeight: isPhone ? 20 : 24 }}>
-                        • {orderItem.quantity}x {orderItem.productName}
-                        {orderItem.note ? ` (${orderItem.note})` : ''}
-                      </Text>
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={{ fontSize: isPhone ? 13 : 14, color: '#86868B', marginRight: 6 }}>•</Text>
+                        <Text style={{ fontSize: isPhone ? 13 : 14, color: '#1D1D1F' }}>
+                          {orderItem.quantity}x {orderItem.productName}
+                        </Text>
+                        {orderItem.note && (
+                          <Text style={{ fontSize: isPhone ? 11 : 12, color: '#86868B', marginLeft: 6, fontStyle: 'italic' }}>
+                            ({orderItem.note})
+                          </Text>
+                        )}
+                      </View>
                     ))}
                     {item.items.length > 3 && (
-                      <Text style={{ fontSize: ui.text.sm, color: '#92400E', fontStyle: 'italic' }}>
-                        +{item.items.length - 3} autres...
+                      <Text style={{ fontSize: isPhone ? 12 : 13, color: '#86868B', fontStyle: 'italic', marginTop: 2 }}>
+                        +{item.items.length - 3} autres articles...
                       </Text>
                     )}
                   </View>
                   
-                  {/* Action buttons - macOS Style */}
-                  <View style={{ flexDirection: 'row', gap: isPhone ? 8 : 10, marginTop: isPhone ? 14 : 18 }}>
-                    {/* Payer maintenant - Quick pay for café flow */}
+                  {/* Action Buttons - macOS Style */}
+                  <View style={{ flexDirection: 'row', gap: isPhone ? 8 : 10, marginTop: isPhone ? 14 : 16 }}>
+                    {/* Encaisser - Primary Action */}
                     <TouchableOpacity
                       onPress={() => {
                         recallOrder(item);
@@ -3905,6 +4410,7 @@ export default function CashierSimpleScreen() {
                         setAmountReceived(item.totalAmount.toString());
                         setShowPaymentModal(true);
                       }}
+                      activeOpacity={0.7}
                       style={{
                         flex: 1,
                         flexDirection: 'row',
@@ -3912,65 +4418,78 @@ export default function CashierSimpleScreen() {
                         justifyContent: 'center',
                         gap: 8,
                         backgroundColor: '#007AFF',
-                        paddingVertical: isPhone ? 12 : 14,
-                        minHeight: isPhone ? 44 : 48,
-                        borderRadius: 6,
+                        paddingVertical: isPhone ? 11 : 13,
+                        borderRadius: 8,
+                        shadowColor: '#007AFF',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
                       }}
                     >
-                      <Banknote size={ui.iconSm} color="#FFFFFF" />
-                      <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: '#FFFFFF' }}>Encaisser</Text>
+                      <Banknote size={isPhone ? 16 : 18} color="#FFFFFF" />
+                      <Text style={{ fontSize: isPhone ? 14 : 15, fontWeight: '600', color: '#FFFFFF' }}>Encaisser</Text>
                     </TouchableOpacity>
-                    {/* Reprendre - Add more items */}
+                    {/* Add More Items */}
                     <TouchableOpacity
                       onPress={() => recallOrder(item)}
+                      activeOpacity={0.7}
                       style={{
-                        flexDirection: 'row',
+                        width: isPhone ? 44 : 48,
+                        height: isPhone ? 44 : 48,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 6,
                         backgroundColor: '#34C759',
-                        paddingVertical: isPhone ? 12 : 14,
-                        paddingHorizontal: isPhone ? 14 : 18,
-                        minHeight: isPhone ? 44 : 48,
-                        borderRadius: 6,
+                        borderRadius: 8,
+                        shadowColor: '#34C759',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
                       }}
                     >
-                      <Plus size={ui.iconSm} color="#FFFFFF" />
+                      <Plus size={isPhone ? 18 : 20} color="#FFFFFF" strokeWidth={2.5} />
                     </TouchableOpacity>
+                    {/* Delete */}
                     <TouchableOpacity
                       onPress={() => cancelOrder(item.id)}
+                      activeOpacity={0.7}
                       style={{
-                        flexDirection: 'row',
+                        width: isPhone ? 44 : 48,
+                        height: isPhone ? 44 : 48,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 6,
-                        backgroundColor: '#FF3B30',
-                        paddingVertical: isPhone ? 12 : 14,
-                        paddingHorizontal: isPhone ? 14 : 18,
-                        minHeight: isPhone ? 44 : 48,
-                        borderRadius: 6,
+                        backgroundColor: '#FF453A',
+                        borderRadius: 8,
+                        shadowColor: '#FF453A',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
                       }}
                     >
-                      <Trash2 size={ui.iconSm} color="#FFFFFF" />
+                      <Trash2 size={isPhone ? 16 : 18} color="#FFFFFF" />
                     </TouchableOpacity>
                   </View>
                 </View>
               );}}
               ListEmptyComponent={() => (
-                <View style={{ padding: isPhone ? 40 : 60, alignItems: 'center' }}>
+                <View style={{ padding: isPhone ? 48 : 64, alignItems: 'center' }}>
                   <View style={{
-                    width: isPhone ? 64 : 80,
-                    height: isPhone ? 64 : 80,
-                    borderRadius: 8,
-                    backgroundColor: '#FEF3C7',
+                    width: isPhone ? 72 : 88,
+                    height: isPhone ? 72 : 88,
+                    borderRadius: 22,
+                    backgroundColor: '#FFF2E0',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    marginBottom: 16,
+                    marginBottom: 20,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,149,0,0.15)',
                   }}>
-                    <Pause size={ui.iconLg} color="#F59E0B" />
+                    <Pause size={isPhone ? 32 : 40} color="#FF9500" />
                   </View>
-                  <Text style={{ fontSize: ui.text.md, color: '#9CA3AF' }}>
-                    Aucune commande en attente
+                  <Text style={{ fontSize: isPhone ? 16 : 17, fontWeight: '600', color: '#1D1D1F', marginBottom: 6 }}>
+                    Aucune commande
+                  </Text>
+                  <Text style={{ fontSize: isPhone ? 13 : 14, color: '#86868B' }}>
+                    Les commandes en attente apparaîtront ici
                   </Text>
                 </View>
               )}
@@ -4112,7 +4631,7 @@ export default function CashierSimpleScreen() {
                   <Banknote size={22} color={colors.success} />
                 </View>
                 <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>Espèces</Text>
-                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
+                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.text }}>
                   {Math.round(dailyStats.cashRevenue).toLocaleString('fr-FR')} <Text style={{ fontSize: fontSize.sm }}>DH</Text>
                 </Text>
               </View>
@@ -4137,7 +4656,7 @@ export default function CashierSimpleScreen() {
                   <CreditCard size={22} color={colors.primary} />
                 </View>
                 <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary }}>Carte</Text>
-                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textPrimary }}>
+                <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.text }}>
                   {Math.round(dailyStats.cardRevenue).toLocaleString('fr-FR')} <Text style={{ fontSize: fontSize.sm }}>DH</Text>
                 </Text>
               </View>
@@ -4162,17 +4681,17 @@ export default function CashierSimpleScreen() {
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
                 <Text style={{ fontSize: fontSize.md, color: colors.textSecondary }}>Dépenses</Text>
-                <Text style={{ fontSize: fontSize.lg, fontWeight: '600', color: colors.error }}>
+                <Text style={{ fontSize: fontSize.lg, fontWeight: '600', color: colors.danger }}>
                   -{Math.round(todayExpenseTotal).toLocaleString('fr-FR')} DH
                 </Text>
               </View>
               <View style={{ height: 1, backgroundColor: colors.borderLight, marginVertical: spacing.md }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary }}>Bénéfice net</Text>
+                <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.text }}>Bénéfice net</Text>
                 <Text style={{ 
                   fontSize: fontSize.xxl, 
                   fontWeight: '800', 
-                  color: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? colors.success : colors.error 
+                  color: (dailyStats.totalRevenue - todayExpenseTotal) >= 0 ? colors.success : colors.danger 
                 }}>
                   {Math.round(dailyStats.totalRevenue - todayExpenseTotal).toLocaleString('fr-FR')} DH
                 </Text>
@@ -4196,8 +4715,8 @@ export default function CashierSimpleScreen() {
                 }}>
                   {lowStockProducts.filter(p => p.stockQuantity === 0).length > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error }} />
-                      <Text style={{ fontSize: fontSize.md, color: colors.error, fontWeight: '600' }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger }} />
+                      <Text style={{ fontSize: fontSize.md, color: colors.danger, fontWeight: '600' }}>
                         {lowStockProducts.filter(p => p.stockQuantity === 0).length} produit(s) épuisé(s)
                       </Text>
                     </View>
@@ -4279,6 +4798,7 @@ export default function CashierSimpleScreen() {
         visible={showAdminPanel}
         onClose={() => setShowAdminPanel(false)}
         onDataChanged={refreshAllData}
+        currentUserId={user?.id}
       />
 
       {/* Analytics Dashboard */}
@@ -4354,7 +4874,7 @@ export default function CashierSimpleScreen() {
               }}>
                 <Search size={ui.iconSm} color={colors.textMuted} />
                 <TextInput
-                  style={{ flex: 1, padding: isPhone ? 12 : 16, fontSize: ui.text.md, color: colors.textPrimary }}
+                  style={{ flex: 1, padding: isPhone ? 12 : 16, fontSize: ui.text.md, color: colors.text }}
                   value={stockSearchQuery}
                   onChangeText={setStockSearchQuery}
                   placeholder="Rechercher un produit..."
@@ -4388,7 +4908,7 @@ export default function CashierSimpleScreen() {
                   <Text style={{ 
                     fontSize: ui.text.sm, 
                     fontWeight: '600', 
-                    color: stockViewMode === 'all' ? colors.white : colors.textPrimary 
+                    color: stockViewMode === 'all' ? colors.white : colors.text 
                   }}>
                     Tous ({allStockProducts.filter(p => p.stockQuantity >= 0).length})
                   </Text>
@@ -4409,7 +4929,7 @@ export default function CashierSimpleScreen() {
                   <Text style={{ 
                     fontSize: ui.text.sm, 
                     fontWeight: '600', 
-                    color: stockViewMode === 'low' ? colors.white : colors.textPrimary 
+                    color: stockViewMode === 'low' ? colors.white : colors.text 
                   }}>
                     Stock Bas ({lowStockProducts.length})
                   </Text>
@@ -4459,12 +4979,12 @@ export default function CashierSimpleScreen() {
                     padding: isPhone ? 16 : 20,
                     borderRadius: 8,
                     borderLeftWidth: 4,
-                    borderLeftColor: isOutOfStock ? colors.error : isLowStock ? colors.warning : colors.success,
+                    borderLeftColor: isOutOfStock ? colors.danger : isLowStock ? colors.warning : colors.success,
                     ...shadows.sm,
                   }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: isPhone ? 12 : 16 }}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.textPrimary }}>{item.name}</Text>
+                        <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.text }}>{item.name}</Text>
                         <Text style={{ fontSize: ui.text.xs, color: colors.textSecondary, marginTop: 2 }}>
                           {item.categoryName} • Seuil: {item.lowStockThreshold}
                         </Text>
@@ -4519,7 +5039,7 @@ export default function CashierSimpleScreen() {
                             style={{
                               fontSize: isPhone ? 22 : 28,
                               fontWeight: '700',
-                              color: colors.textPrimary,
+                              color: colors.text,
                               textAlign: 'center',
                               minWidth: isPhone ? 80 : 100,
                               padding: isPhone ? 4 : 8,
@@ -4552,7 +5072,7 @@ export default function CashierSimpleScreen() {
                             <Text style={{ 
                               fontSize: isPhone ? 22 : 28, 
                               fontWeight: '700', 
-                              color: isOutOfStock ? colors.error : isLowStock ? colors.warning : colors.textPrimary 
+                              color: isOutOfStock ? colors.danger : isLowStock ? colors.warning : colors.text 
                             }}>
                               {item.stockQuantity}
                             </Text>
@@ -4616,7 +5136,7 @@ export default function CashierSimpleScreen() {
                   ) : (
                     <>
                       <Package size={ui.iconLg + 16} color={colors.textMuted} />
-                      <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: colors.textPrimary, marginTop: 16 }}>Aucun produit</Text>
+                      <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: colors.text, marginTop: 16 }}>Aucun produit</Text>
                       <Text style={{ fontSize: ui.text.sm, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>
                         Ajoutez des produits avec suivi de stock dans l&apos;admin
                       </Text>
@@ -4681,7 +5201,7 @@ export default function CashierSimpleScreen() {
               borderWidth: 1,
               borderColor: '#D0D0D0', 
             }}>
-              <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.textPrimary, marginBottom: isPhone ? 12 : 16 }}>
+              <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.text, marginBottom: isPhone ? 12 : 16 }}>
                 Nouvelle dépense
               </Text>
               
@@ -4694,7 +5214,7 @@ export default function CashierSimpleScreen() {
                     padding: isPhone ? 12 : 16,
                     fontSize: ui.text.lg,
                     fontWeight: '600',
-                    color: colors.textPrimary,
+                    color: colors.text,
                     borderWidth: 1,
                     borderColor: '#C0C0C0',
                     minHeight: isPhone ? 44 : 48,
@@ -4730,7 +5250,7 @@ export default function CashierSimpleScreen() {
                       <Text style={{ 
                         fontSize: ui.text.sm, 
                         fontWeight: '500', 
-                        color: expenseCategory.id === cat.id ? '#FFFFFF' : colors.textPrimary 
+                        color: expenseCategory.id === cat.id ? '#FFFFFF' : colors.text 
                       }}>
                         {cat.label}
                       </Text>
@@ -4745,7 +5265,7 @@ export default function CashierSimpleScreen() {
                   borderRadius: 6,
                   padding: isPhone ? 12 : 16,
                   fontSize: ui.text.md,
-                  color: colors.textPrimary,
+                  color: colors.text,
                   borderWidth: 1,
                   borderColor: '#C0C0C0',
                   marginBottom: isPhone ? 12 : 16,
@@ -4776,7 +5296,7 @@ export default function CashierSimpleScreen() {
             </View>
             
             {/* Today's Expenses List */}
-            <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.textPrimary, marginHorizontal: isPhone ? 16 : 24, marginBottom: isPhone ? 12 : 16 }}>
+            <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.text, marginHorizontal: isPhone ? 16 : 24, marginBottom: isPhone ? 12 : 16 }}>
               Dépenses du jour
             </Text>
             <FlatList
@@ -4805,7 +5325,7 @@ export default function CashierSimpleScreen() {
                     <Wallet size={ui.iconSm} color="#FF3B30" />
                   </View>
                   <View style={{ flex: 1, marginLeft: isPhone ? 12 : 16 }}>
-                    <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.textPrimary }}>{item.category}</Text>
+                    <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.text }}>{item.category}</Text>
                     {item.description && (
                       <Text style={{ fontSize: ui.text.sm, color: colors.textSecondary, marginTop: 2 }}>{item.description}</Text>
                     )}
@@ -4813,7 +5333,7 @@ export default function CashierSimpleScreen() {
                       {item.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
-                  <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: colors.error, marginRight: isPhone ? 12 : 16 }}>
+                  <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: colors.danger, marginRight: isPhone ? 12 : 16 }}>
                     -{item.amount} DH
                   </Text>
                   <TouchableOpacity 
@@ -4915,7 +5435,7 @@ export default function CashierSimpleScreen() {
                   )}
                 </View>
                 <View style={{ flex: 1, marginLeft: isPhone ? 12 : 16 }}>
-                  <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.textPrimary }}>{item.title}</Text>
+                  <Text style={{ fontSize: ui.text.md, fontWeight: '600', color: colors.text }}>{item.title}</Text>
                   <Text style={{ fontSize: ui.text.sm, color: colors.textSecondary, marginTop: 2 }}>{item.message}</Text>
                 </View>
                 <ChevronRight size={ui.iconSm} color={colors.textMuted} />
@@ -4924,7 +5444,7 @@ export default function CashierSimpleScreen() {
             ListEmptyComponent={
               <View style={{ alignItems: 'center', paddingVertical: isPhone ? 60 : 80 }}>
                 <Bell size={ui.iconLg + 16} color={colors.border} />
-                <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: colors.textPrimary, marginTop: 16 }}>Tout est en ordre!</Text>
+                <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: colors.text, marginTop: 16 }}>Tout est en ordre!</Text>
                 <Text style={{ fontSize: ui.text.sm, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>
                   Aucune notification pour le moment.{'\n'}Nous vous alerterons en cas de stock bas.
                 </Text>
@@ -5004,7 +5524,7 @@ export default function CashierSimpleScreen() {
                     borderColor: '#A5D6A7',
                   }}>
                     <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: '#1B5E20', marginBottom: 12 }}>
-                      📊 Résumé de la Session
+                      Résumé de la Session
                     </Text>
                     
                     <View style={{ gap: 8 }}>
@@ -5040,7 +5560,7 @@ export default function CashierSimpleScreen() {
                       </View>
                       <View style={{ height: 1, backgroundColor: '#C8E6C9', marginVertical: 8 }} />
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: '#1B5E20' }}>💵 Attendu en caisse:</Text>
+                        <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: '#1B5E20' }}>Attendu en caisse:</Text>
                         <Text style={{ fontSize: ui.text.lg, fontWeight: '700', color: '#1B5E20' }}>
                           {Math.round((currentSession.openingAmount || 0) + dailyStats.cashRevenue - todayExpenseTotal)} DH
                         </Text>
@@ -5056,8 +5576,8 @@ export default function CashierSimpleScreen() {
                     borderWidth: 1,
                     borderColor: '#D0D0D0', 
                   }}>
-                    <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: colors.textPrimary, marginBottom: 16 }}>
-                      💵 Comptez votre caisse
+                    <Text style={{ fontSize: ui.text.lg, fontWeight: '600', color: colors.text, marginBottom: 16 }}>
+                      Comptez votre caisse
                     </Text>
                     
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -5069,7 +5589,7 @@ export default function CashierSimpleScreen() {
                           padding: isPhone ? 14 : 18,
                           fontSize: ui.text.xxl,
                           fontWeight: '700',
-                          color: colors.textPrimary,
+                          color: colors.text,
                           borderWidth: 1,
                           borderColor: '#007AFF',
                           textAlign: 'center',
@@ -5102,7 +5622,7 @@ export default function CashierSimpleScreen() {
                             <Text style={{ 
                               fontSize: ui.text.md, 
                               fontWeight: '600', 
-                              color: sessionClosingAmount === amount.toString() ? '#FFFFFF' : colors.textPrimary 
+                              color: sessionClosingAmount === amount.toString() ? '#FFFFFF' : colors.text 
                             }}>
                               {amount}
                             </Text>
@@ -5139,8 +5659,8 @@ export default function CashierSimpleScreen() {
                   borderWidth: 1,
                   borderColor: '#D0D0D0', 
                 }}>
-                  <Text style={{ fontSize: ui.text.xl, fontWeight: '600', color: colors.textPrimary, marginBottom: 8, textAlign: 'center' }}>
-                    🔐 Ouvrir la Caisse
+                  <Text style={{ fontSize: ui.text.xl, fontWeight: '600', color: colors.text, marginBottom: 8, textAlign: 'center' }}>
+                    Ouvrir la Caisse
                   </Text>
                   <Text style={{ fontSize: ui.text.sm, color: colors.textSecondary, marginBottom: 24, textAlign: 'center' }}>
                     Entrez le montant en caisse pour commencer la journée
@@ -5159,7 +5679,7 @@ export default function CashierSimpleScreen() {
                         padding: isPhone ? 14 : 18,
                         fontSize: ui.text.xxl,
                         fontWeight: '700',
-                        color: colors.textPrimary,
+                        color: colors.text,
                         borderWidth: 1,
                         borderColor: '#007AFF',
                         textAlign: 'center',
@@ -5193,7 +5713,7 @@ export default function CashierSimpleScreen() {
                         <Text style={{ 
                           fontSize: ui.text.md, 
                           fontWeight: '600', 
-                          color: sessionOpeningAmount === amount.toString() ? '#FFFFFF' : colors.textPrimary 
+                          color: sessionOpeningAmount === amount.toString() ? '#FFFFFF' : colors.text 
                         }}>
                           {amount === 0 ? '0' : amount}
                         </Text>
@@ -5224,6 +5744,9 @@ export default function CashierSimpleScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* First-time user onboarding tutorial */}
+      <OnboardingTutorial />
     </SafeAreaView>
   );
 }

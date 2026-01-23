@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AlertTriangle } from 'lucide-react-native';
 
 interface Props {
   children: ReactNode;
@@ -48,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
               alignItems: 'center',
               marginBottom: 24 
             }}>
-              <Text style={{ fontSize: 40 }}>⚠️</Text>
+              <AlertTriangle size={40} color="#DC2626" />
             </View>
             
             <Text style={{ 

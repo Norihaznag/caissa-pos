@@ -1,11 +1,91 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, useWindowDimensions, Animated, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Coffee, Database, Delete } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { initOfflineDatabase, offlineUserService } from '../lib/offline-db';
 import * as Haptics from 'expo-haptics';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import { MacOSAppLoading } from '../components/ui/MacOSButton';
+
+// Animated Numpad Button - macOS style with smooth press animation
+interface NumpadButtonProps {
+  value: string | number;
+  onPress: () => void;
+  isSpecial?: boolean;
+  disabled?: boolean;
+  size: number;
+}
+
+function AnimatedNumpadButton({ value, onPress, isSpecial = false, disabled = false, size }: NumpadButtonProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [pressed, setPressed] = useState(false);
+  
+  const handlePressIn = () => {
+    setPressed(true);
+    Animated.spring(scaleAnim, {
+      toValue: 0.92,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 0,
+    }).start();
+  };
+  
+  const handlePressOut = () => {
+    setPressed(false);
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 25,
+      bounciness: 6,
+    }).start();
+  };
+  
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress();
+  };
+  
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Pressable
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled}
+        accessibilityLabel={typeof value === 'number' ? `Chiffre ${value}` : String(value)}
+        accessibilityRole="button"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: 10,
+          backgroundColor: pressed 
+            ? (isSpecial ? '#FFD0D0' : '#E8E8E8') 
+            : (isSpecial ? '#FFE5E5' : '#FFFFFF'),
+          borderWidth: 1,
+          borderColor: pressed
+            ? (isSpecial ? '#E53935' : '#A0A0A0')
+            : (isSpecial ? '#FF3B30' : '#C0C0C0'),
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {value === '⌫' ? (
+          <Delete size={20} color="#666666" />
+        ) : (
+          <Text style={{
+            fontSize: typeof value === 'number' ? 24 : 13,
+            fontWeight: '600',
+            color: isSpecial ? '#FF3B30' : '#333333',
+          }}>
+            {value}
+          </Text>
+        )}
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 export default function LoginScreen() {
   const [pin, setPin] = useState('');
@@ -22,6 +102,14 @@ export default function LoginScreen() {
   
   // Dynamic button sizing
   const numpadButtonSize = isLargeScreen ? 72 : isTablet ? 64 : 56;
+
+  // Lock to landscape mode for tablets
+  useEffect(() => {
+    const lockLandscape = async () => {
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    };
+    lockLandscape();
+  }, []);
 
   // Initialize offline database on mount
   useEffect(() => {
@@ -103,66 +191,26 @@ export default function LoginScreen() {
   };
 
   const renderNumpadButton = (value: string | number, onPress: () => void, isSpecial = false, key?: string | number) => (
-    <TouchableOpacity
-      key={key ?? value}
-      onPress={onPress}
+    <AnimatedNumpadButton 
+      key={key ?? value} 
+      value={value} 
+      onPress={onPress} 
+      isSpecial={isSpecial} 
       disabled={loading}
-      accessibilityLabel={typeof value === 'number' ? `Chiffre ${value}` : value}
-      accessibilityRole="button"
-      style={{
-        width: numpadButtonSize,
-        height: numpadButtonSize,
-        borderRadius: 8,
-        backgroundColor: isSpecial ? '#FFE5E5' : '#FFFFFF',
-        borderWidth: 1,
-        borderColor: isSpecial ? '#FF3B30' : '#C0C0C0',
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 2,
-        elevation: 2,
-      }}
-      activeOpacity={0.7}
-    >
-      {value === '⌫' ? (
-        <Delete size={20} color="#666666" />
-      ) : (
-        <Text style={{
-          fontSize: typeof value === 'number' ? 24 : 13,
-          fontWeight: '600',
-          color: isSpecial ? '#FF3B30' : '#333333',
-        }}>
-          {value}
-        </Text>
-      )}
-    </TouchableOpacity>
+      size={numpadButtonSize}
+    />
   );
 
   // Show loading screen during initialization - macOS Style
   if (initializing) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#E8E8E8', justifyContent: 'center', alignItems: 'center' }}>
-        <View style={{
-          width: 80,
-          height: 80,
-          borderRadius: 16,
-          backgroundColor: '#007AFF',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: 24,
-          shadowColor: '#007AFF',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-        }}>
-          <Coffee size={40} color="#FFFFFF" />
-        </View>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={{ marginTop: 16, color: '#8E8E93', fontSize: 15, fontWeight: '500' }}>
-          Initialisation...
-        </Text>
+      <SafeAreaView style={{ flex: 1 }}>
+        <MacOSAppLoading
+          appName="CaissaPro"
+          icon={<Coffee size={40} color="#FFFFFF" />}
+          message="Initialisation..."
+          accentColor="#8B7355"
+        />
       </SafeAreaView>
     );
   }
@@ -337,36 +385,30 @@ export default function LoginScreen() {
                 <View style={{ gap: 10 }}>
                   {/* Row 1: 1, 2, 3 */}
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {[1, 2, 3].map((num) => (
-                      <React.Fragment key={`num-${num}`}>
-                        {renderNumpadButton(num, () => handlePinPress(num.toString()), false, `num-${num}`)}
-                      </React.Fragment>
-                    ))}
+                    {renderNumpadButton(1, () => handlePinPress('1'))}
+                    {renderNumpadButton(2, () => handlePinPress('2'))}
+                    {renderNumpadButton(3, () => handlePinPress('3'))}
                   </View>
                   
                   {/* Row 2: 4, 5, 6 */}
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {[4, 5, 6].map((num) => (
-                      <React.Fragment key={`num-${num}`}>
-                        {renderNumpadButton(num, () => handlePinPress(num.toString()), false, `num-${num}`)}
-                      </React.Fragment>
-                    ))}
+                    {renderNumpadButton(4, () => handlePinPress('4'))}
+                    {renderNumpadButton(5, () => handlePinPress('5'))}
+                    {renderNumpadButton(6, () => handlePinPress('6'))}
                   </View>
                   
                   {/* Row 3: 7, 8, 9 */}
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {[7, 8, 9].map((num) => (
-                      <React.Fragment key={`num-${num}`}>
-                        {renderNumpadButton(num, () => handlePinPress(num.toString()), false, `num-${num}`)}
-                      </React.Fragment>
-                    ))}
+                    {renderNumpadButton(7, () => handlePinPress('7'))}
+                    {renderNumpadButton(8, () => handlePinPress('8'))}
+                    {renderNumpadButton(9, () => handlePinPress('9'))}
                   </View>
                   
                   {/* Row 4: CLR, 0, ⌫ */}
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {renderNumpadButton('CLR', handleClear, true, 'clear')}
-                    {renderNumpadButton(0, () => handlePinPress('0'), false, 'num-0')}
-                    {renderNumpadButton('⌫', handleBackspace, false, 'backspace')}
+                    {renderNumpadButton('CLR', handleClear, true)}
+                    {renderNumpadButton(0, () => handlePinPress('0'))}
+                    {renderNumpadButton('⌫', handleBackspace)}
                   </View>
                 </View>
               </View>

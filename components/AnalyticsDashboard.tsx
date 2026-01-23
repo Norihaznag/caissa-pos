@@ -151,7 +151,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#EDEDED' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#ECECEC' }}>
         {/* Header - macOS style */}
         <View style={{
           flexDirection: 'row',
@@ -159,9 +159,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           alignItems: 'center',
           paddingHorizontal: spacing.xl,
           paddingVertical: spacing.md,
-          backgroundColor: '#F5F5F5',
+          backgroundColor: '#E8E8E8',
           borderBottomWidth: 1,
-          borderBottomColor: '#D0D0D0',
+          borderBottomColor: '#CFCFCF',
         }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
             <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#E5F1FF', alignItems: 'center', justifyContent: 'center' }}>
@@ -181,7 +181,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             style={{ 
               width: 32, 
               height: 32, 
-              borderRadius: 6, 
+              borderRadius: 8, 
               backgroundColor: '#E8E8E8',
               borderWidth: 1,
               borderColor: '#C8C8C8',
@@ -352,7 +352,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               ...shadows.md,
             }}>
               <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.lg }}>
-                📈 Tendance des 7 derniers jours
+                Tendance des 7 derniers jours
               </Text>
               {weeklyChartData.length > 0 ? (
                 <BarChart
@@ -391,7 +391,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 ...shadows.md,
               }}>
                 <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.lg }}>
-                  💳 Modes de paiement
+                  Modes de paiement
                 </Text>
                 {paymentPieData.length > 0 ? (
                   <View style={{ alignItems: 'center' }}>
@@ -440,7 +440,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 ...shadows.md,
               }}>
                 <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.lg }}>
-                  🏆 Top 5 Produits
+                  Top 5 Produits
                 </Text>
                 {topProducts.length > 0 ? (
                   topProducts.map((product, index) => (

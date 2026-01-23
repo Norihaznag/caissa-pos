@@ -1,4 +1,4 @@
-/**
+﻿/**
  * StaffManagement.tsx
  * v2.3 - Complete staff management UI for CaissaPro Admin
  * Includes: Shifts, Planning, Salaires, Performance
@@ -15,7 +15,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  FlatList,
+  
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,20 +30,17 @@ import {
   Square,
   ChevronRight,
   AlertTriangle,
-  CheckCircle,
   Plus,
-  Trash2,
   Edit3,
   Printer,
   DollarSign,
   Award,
-  ChevronLeft,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing, borderRadius, fontSize, shadows } from '../lib/theme';
 import { shiftService, Shift, ShiftSummary } from '../lib/shifts/shiftService';
 import { staffAnalyticsService, StaffPerformance, TeamOverview } from '../lib/analytics/staffAnalytics';
-import { payrollService, PayrollEntry, StaffCompensation, SalaryType } from '../lib/payroll/payrollService';
+import { payrollService, PayrollEntry, StaffCompensation } from '../lib/payroll/payrollService';
 import { scheduleService, PlannedShift, WeekSchedule } from '../lib/schedule/scheduleService';
 import { getDatabase } from '../lib/offline-db';
 
@@ -204,7 +201,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
       setShiftNotes('');
       loadData();
       
-      Alert.alert('✅ Shift ouvert', 'Le shift a été ouvert avec succès');
+      Alert.alert('Shift ouvert', 'Le shift a été ouvert avec succès');
     } catch (error: any) {
       Alert.alert('Erreur', error.message || 'Impossible d\'ouvrir le shift');
     }
@@ -220,7 +217,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
     }
     
     Alert.alert(
-      '🔒 Clôturer le shift',
+      'Clôturer le shift',
       `Confirmez-vous la clôture du shift de ${selectedShift.userName}?\n\nMontant en caisse: ${amount.toFixed(2)} DH`,
       [
         { text: 'Annuler', style: 'cancel' },
@@ -310,7 +307,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
     >
       {/* Today Stats Cards */}
       <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.md }}>
-        📊 Vue d'ensemble - Aujourd'hui
+        Vue d'ensemble - Aujourd'hui
       </Text>
       
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.xl }}>
@@ -390,7 +387,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
         }}>
           <Award size={32} color="#D97706" />
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: fontSize.sm, color: '#92400E' }}>🏆 Meilleur vendeur</Text>
+            <Text style={{ fontSize: fontSize.sm, color: '#92400E' }}>Meilleur vendeur</Text>
             <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: '#78350F' }}>
               {teamOverview.topPerformer.userName}
             </Text>
@@ -404,9 +401,12 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
       {/* Open Shifts List */}
       <View style={{ marginBottom: spacing.xl }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
-          <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary }}>
-            ⏱️ Shifts en cours
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <Clock size={18} color={colors.textPrimary} />
+            <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary }}>
+              Shifts en cours
+            </Text>
+          </View>
           <TouchableOpacity
             onPress={() => setShowOpenShiftModal(true)}
             style={{
@@ -516,7 +516,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
       
       {/* Recent Closed Shifts */}
       <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.md }}>
-        📋 Shifts d'aujourd'hui
+        Shifts d'aujourd'hui
       </Text>
       
       {todayShifts.filter(s => s.status === 'CLOSED').length === 0 ? (
@@ -583,7 +583,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}
     >
       <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.md }}>
-        🏆 Performance de l'équipe (7 derniers jours)
+        Performance de l'équipe (7 derniers jours)
       </Text>
       
       {teamPerformance.length === 0 ? (
@@ -670,7 +670,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
         <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary }}>
-          📅 Planning de la semaine
+          Planning de la semaine
         </Text>
         <TouchableOpacity
           onPress={() => setShowAddScheduleModal(true)}
@@ -765,7 +765,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}
     >
       <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.md }}>
-        💰 Gestion des salaires
+        Gestion des salaires
       </Text>
       
       {/* Quick Actions */}
@@ -999,9 +999,12 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
         <Modal visible={showOpenShiftModal} transparent animationType="fade">
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>
             <View style={{ backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.xl, width: '100%', maxWidth: 400 }}>
-              <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.lg }}>
-                ▶️ Ouvrir un shift
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg }}>
+                <Play size={18} color={colors.textPrimary} />
+                <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary }}>
+                  Ouvrir un shift
+                </Text>
+              </View>
               
               {/* User Selection */}
               <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.xs }}>
@@ -1119,7 +1122,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>
             <View style={{ backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.xl, width: '100%', maxWidth: 400 }}>
               <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.md }}>
-                🔒 Clôturer le shift
+                Clôturer le shift
               </Text>
               
               {selectedShift && (
@@ -1226,7 +1229,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
             <View style={{ backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.xl, width: '100%', maxWidth: 450, maxHeight: '80%' }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
                 <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.textPrimary }}>
-                  📋 Rapport de Shift
+                  Rapport de Shift
                 </Text>
                 <TouchableOpacity onPress={() => setShowShiftSummaryModal(false)}>
                   <X size={24} color={colors.textSecondary} />
@@ -1256,7 +1259,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
                   {/* Sales Summary */}
                   <View style={{ marginBottom: spacing.lg }}>
                     <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.sm }}>
-                      💰 Ventes
+                      Ventes
                     </Text>
                     <View style={{ backgroundColor: colors.background, borderRadius: borderRadius.md, padding: spacing.md }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
@@ -1281,7 +1284,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
                   {/* Cash Summary */}
                   <View style={{ marginBottom: spacing.lg }}>
                     <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.sm }}>
-                      🏧 Caisse
+                      Caisse
                     </Text>
                     <View style={{ backgroundColor: colors.background, borderRadius: borderRadius.md, padding: spacing.md }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
@@ -1329,7 +1332,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
                   {shiftSummary.topProducts.length > 0 && (
                     <View style={{ marginBottom: spacing.lg }}>
                       <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.sm }}>
-                        🏆 Top produits
+                        Top produits
                       </Text>
                       {shiftSummary.topProducts.map((prod, i) => (
                         <View key={i} style={{
@@ -1347,7 +1350,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({ visible, onClo
                   {/* Print Button */}
                   <TouchableOpacity
                     onPress={() => {
-                      Alert.alert('🖨️', 'Impression du rapport en cours...');
+                      Alert.alert('Impression', 'Impression du rapport en cours...');
                     }}
                     style={{
                       backgroundColor: colors.primary,

@@ -647,7 +647,7 @@ export const PrinterTestScreen: React.FC<Props> = ({ visible = true, onClose }) 
             width: '100%',
           }}>
             <Text style={{ fontSize: 13, color: COLORS.primary, fontWeight: '600', textAlign: 'center' }}>
-              📦 CaissaPro-v2.1.1-release.apk
+              CaissaPro-v2.1.1-release.apk
             </Text>
           </View>
           <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 16, textAlign: 'center' }}>

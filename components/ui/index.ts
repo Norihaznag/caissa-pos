@@ -6,3 +6,4 @@ export { Badge } from './Badge';
 export { Modal } from './Modal';
 export { Header } from './Header';
 export { Skeleton, TableSkeleton, OrderSkeleton, ProductSkeleton } from './Skeleton';
+export { MacOSButton, MacOSLoading, MacOSAppLoading } from './MacOSButton';

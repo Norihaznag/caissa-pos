@@ -51,6 +51,7 @@ export interface ReceiptItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  note?: string;
 }
 
 export interface ReceiptData {
@@ -605,12 +606,13 @@ class PrinterServiceClass {
         waiterName: data.waiterName || '',
         date: data.date,
         
-        // Items
+        // Items (with per-item notes)
         items: (data.items || []).map(item => ({
           name: item.name,
           quantity: item.quantity,
           price: item.unitPrice,
           total: item.total,
+          note: item.note || '',
         })),
         
         // Totals

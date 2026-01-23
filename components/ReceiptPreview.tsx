@@ -20,6 +20,7 @@ export interface ReceiptItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  note?: string;
 }
 
 export interface ReceiptDesign {
@@ -31,6 +32,10 @@ export interface ReceiptDesign {
   
   // Footer
   footerMessage?: string;
+  
+  // WiFi
+  wifiPassword?: string;
+  showWifi?: boolean;
   
   // Toggle options
   showOrderNumber?: boolean;
@@ -166,6 +171,16 @@ export function ReceiptPreview({ visible, onClose, onPrint, order, design }: Rec
         ? item.name.slice(0, maxNameLen - 2) + '..' 
         : item.name;
       lines.push(formatLine(`${qtyPrefix}${truncName}`, priceStr));
+      
+      // Item note (if any)
+      if (item.note && item.note.trim()) {
+        const noteText = `   ⤷ ${item.note.trim()}`;
+        if (noteText.length > charWidth) {
+          lines.push(noteText.slice(0, charWidth - 2) + '..');
+        } else {
+          lines.push(noteText);
+        }
+      }
     }
     
     lines.push(separatorChar.repeat(charWidth));
@@ -208,6 +223,18 @@ export function ReceiptPreview({ visible, onClose, onPrint, order, design }: Rec
         lines.push(' '.repeat(Math.max(0, padding)) + design.footerMessage);
       } else {
         lines.push(design.footerMessage);
+      }
+    }
+    
+    // WiFi Password
+    if (design.showWifi && design.wifiPassword) {
+      lines.push('');
+      const wifiLine = `WiFi: ${design.wifiPassword}`;
+      if (design.centerHeader) {
+        const padding = Math.floor((charWidth - wifiLine.length) / 2);
+        lines.push(' '.repeat(Math.max(0, padding)) + wifiLine);
+      } else {
+        lines.push(wifiLine);
       }
     }
     

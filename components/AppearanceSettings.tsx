@@ -15,10 +15,10 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
-import { Check, Palette, Moon, Sun, Sparkles, Download, Upload, Trash2, X, Copy } from 'lucide-react-native';
+import { Check, Palette, Moon, Sun, Sparkles, Download, Upload, Trash2, X, Copy, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAppTheme, Theme } from '../lib/themes/ThemeContext';
-import { spacing, borderRadius, fontSize, shadows } from '../lib/theme';
+import { spacing, borderRadius, fontSize } from '../lib/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - 48 - 16) / 2; // 2 columns with padding
@@ -47,7 +47,7 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
       // Show success feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
-        '✅ Thème Appliqué',
+        'Thème Appliqué',
         `Le thème "${selectedTheme.name}" a été activé avec succès.`,
         [{ text: 'OK' }]
       );
@@ -99,10 +99,11 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
       {/* Current Theme */}
       <View style={{
         backgroundColor: colors.surface,
-        borderRadius: borderRadius.lg,
+        borderRadius: 12,
         padding: spacing.lg,
         marginBottom: spacing.xl,
-        ...shadows.sm,
+        borderWidth: 1,
+        borderColor: '#CFCFCF',
       }}>
         <Text style={{ 
           fontSize: fontSize.xs, 
@@ -171,12 +172,11 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
               style={{
                 width: CARD_WIDTH,
                 backgroundColor: themeItem.preview.background,
-                borderRadius: borderRadius.lg,
+                borderRadius: 10,
                 overflow: 'hidden',
-                borderWidth: isSelected ? 3 : 1,
-                borderColor: isSelected ? colors.primary : colors.border,
+                borderWidth: isSelected ? 2 : 1,
+                borderColor: isSelected ? colors.primary : '#CFCFCF',
                 opacity: applying && !isSelected ? 0.5 : 1,
-                ...shadows.sm,
               }}
               activeOpacity={0.7}
             >
@@ -256,18 +256,24 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
 
       {/* Info Box */}
       <View style={{
-        backgroundColor: colors.infoLight,
-        borderRadius: borderRadius.md,
+        backgroundColor: '#E3F2FD',
+        borderRadius: 10,
         padding: spacing.md,
         marginBottom: spacing.lg,
+        borderWidth: 1,
+        borderColor: '#BBDEFB',
       }}>
-        <Text style={{ 
-          fontSize: fontSize.sm, 
-          color: colors.info,
-          fontWeight: '500',
-        }}>
-          💡 Le thème est sauvegardé localement et sera appliqué automatiquement au prochain démarrage.
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+          <Info size={16} color={colors.info} style={{ marginTop: 2 }} />
+          <Text style={{ 
+            fontSize: fontSize.sm, 
+            color: colors.info,
+            fontWeight: '500',
+            flex: 1,
+          }}>
+            Le thème est sauvegardé localement et sera appliqué automatiquement au prochain démarrage.
+          </Text>
+        </View>
       </View>
 
       {/* Import / Export Buttons */}
@@ -284,11 +290,11 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
             alignItems: 'center',
             justifyContent: 'center',
             gap: spacing.sm,
-            backgroundColor: colors.surface,
-            borderRadius: borderRadius.md,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 10,
             padding: spacing.md,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: '#CFCFCF',
           }}
         >
           <Upload size={18} color={colors.primary} />
@@ -306,11 +312,11 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
             alignItems: 'center',
             justifyContent: 'center',
             gap: spacing.sm,
-            backgroundColor: colors.surface,
-            borderRadius: borderRadius.md,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 10,
             padding: spacing.md,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: '#CFCFCF',
           }}
         >
           <Download size={18} color={colors.primary} />
@@ -335,12 +341,12 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                backgroundColor: colors.surface,
-                borderRadius: borderRadius.md,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 10,
                 padding: spacing.md,
                 marginBottom: spacing.sm,
                 borderWidth: 1,
-                borderColor: colors.border,
+                borderColor: '#CFCFCF',
               }}
             >
               <View style={{
@@ -423,8 +429,8 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
               multiline
               numberOfLines={8}
               style={{
-                backgroundColor: colors.background,
-                borderRadius: borderRadius.md,
+                backgroundColor: '#F5F5F5',
+                borderRadius: 10,
                 padding: spacing.md,
                 color: colors.text,
                 fontSize: fontSize.sm,
@@ -432,7 +438,7 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
                 minHeight: 150,
                 textAlignVertical: 'top',
                 borderWidth: 1,
-                borderColor: colors.border,
+                borderColor: '#CFCFCF',
                 marginBottom: spacing.lg,
               }}
             />
@@ -446,7 +452,7 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
                 const result = await importTheme(importJson);
                 if (result.success) {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  Alert.alert('✅ Succès', `Le thème "${result.theme?.name}" a été importé !`);
+                  Alert.alert('Succès', `Le thème "${result.theme?.name}" a été importé !`);
                   setImportJson('');
                   setImportModalVisible(false);
                 } else {
@@ -455,10 +461,12 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
                 }
               }}
               style={{
-                backgroundColor: colors.primary,
-                borderRadius: borderRadius.md,
+                backgroundColor: '#007AFF',
+                borderRadius: 10,
                 padding: spacing.md,
                 alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#006AE6',
               }}
             >
               <Text style={{ color: colors.white, fontWeight: '700' }}>Importer</Text>
@@ -482,11 +490,13 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
           padding: spacing.lg,
         }}>
           <View style={{
-            backgroundColor: colors.surface,
-            borderRadius: borderRadius.lg,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 12,
             padding: spacing.lg,
             width: '100%',
             maxWidth: 400,
+            borderWidth: 1,
+            borderColor: '#CFCFCF',
           }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
               <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.text }}>
@@ -502,12 +512,12 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
             </Text>
             
             <View style={{
-              backgroundColor: colors.background,
-              borderRadius: borderRadius.md,
+              backgroundColor: '#F5F5F5',
+              borderRadius: 10,
               padding: spacing.md,
               marginBottom: spacing.lg,
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: '#CFCFCF',
             }}>
               <ScrollView style={{ maxHeight: 200 }}>
                 <Text style={{
@@ -522,17 +532,19 @@ export default function AppearanceSettings({ onClose }: AppearanceSettingsProps)
 
             <TouchableOpacity
               onPress={() => {
-                Alert.alert('📋 Copié !', 'Le thème a été copié dans le presse-papiers. Utilisez "Coller" pour le partager.');
+                Alert.alert('Copié', 'Le thème a été copié dans le presse-papiers. Utilisez "Coller" pour le partager.');
                 setExportModalVisible(false);
               }}
               style={{
-                backgroundColor: colors.primary,
-                borderRadius: borderRadius.md,
+                backgroundColor: '#007AFF',
+                borderRadius: 10,
                 padding: spacing.md,
                 alignItems: 'center',
                 flexDirection: 'row',
                 justifyContent: 'center',
                 gap: spacing.sm,
+                borderWidth: 1,
+                borderColor: '#006AE6',
               }}
             >
               <Copy size={18} color={colors.white} />
