@@ -1,12 +1,15 @@
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Key, 
   Smartphone, 
   ScrollText, 
   Settings,
-  Shield
+  Shield,
+  LogOut,
+  User
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -17,6 +20,14 @@ const navItems = [
 ];
 
 export default function Layout() {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
   return (
     <div className="flex h-screen bg-gray-950">
       {/* Sidebar */}
@@ -57,11 +68,24 @@ export default function Layout() {
           </ul>
         </nav>
 
-        {/* Footer */}
+        {/* User & Logout */}
         <div className="p-4 border-t border-gray-800">
-          <p className="text-xs text-gray-600 text-center">
-            © 2026 CaissaPro
-          </p>
+          <div className="flex items-center gap-3 px-3 py-2 mb-3">
+            <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
+              <User className="w-4 h-4 text-gray-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white truncate">{user?.email}</p>
+              <p className="text-xs text-gray-500">Admin</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="text-sm">Logout</span>
+          </button>
         </div>
       </aside>
 
