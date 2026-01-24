@@ -3,22 +3,17 @@ import '@/global.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import LicenseGate from '@/components/LicenseGate';
 
-// LICENSE SYSTEM - TEMPORARILY DISABLED
-// To enable licensing, uncomment the code below and follow LICENSE_SETUP.md
-// import React, { useState, useEffect } from 'react';
-// import LicenseActivation from '@/components/LicenseActivation';
-// import { validateLicense, LicenseData } from '@/lib/license';
-// import { useAppStore } from '@/lib/store';
+// LICENSE SYSTEM CONFIGURATION:
+// 1. Set up Supabase project and run lib/license/schema.sql
+// 2. Update SUPABASE_URL and SUPABASE_ANON_KEY in lib/license/supabaseClient.ts
+// 3. Set ENABLE_LICENSE = true below to activate the system
+
+const ENABLE_LICENSE = true; // License system is now ACTIVE
 
 export default function RootLayout() {
-  // LICENSE CHECK DISABLED - App works without license for now
-  // When ready to enable licensing:
-  // 1. Update GUMROAD_PRODUCT_ID in lib/license.ts
-  // 2. Uncomment the license code below
-  // 3. See LICENSE_SETUP.md for full instructions
-
-  return (
+  const appContent = (
     <ErrorBoundary>
       <ThemeProvider>
         <SafeAreaProvider>
@@ -27,4 +22,18 @@ export default function RootLayout() {
       </ThemeProvider>
     </ErrorBoundary>
   );
+
+  // License check enabled
+  if (ENABLE_LICENSE) {
+    return (
+      <ErrorBoundary>
+        <LicenseGate>
+          {appContent}
+        </LicenseGate>
+      </ErrorBoundary>
+    );
+  }
+
+  // License check disabled - app works freely
+  return appContent;
 }

@@ -88,6 +88,7 @@ import {
   saveReceiptDesign,
   type ReceiptDesign,
 } from '../lib/printing';
+import { getDeviceFingerprint, LicenseService, LicenseState } from '../lib/license/index';
 import { PrinterService, type PrinterState, type PrinterDevice } from '../lib/services/PrinterService';
 import { UnifiedPrinterModal } from './UnifiedPrinterModal';
 import { HistoryCalendar } from './HistoryCalendar';
@@ -233,6 +234,11 @@ export default function AdminPanel({ visible, onClose, onDataChanged, currentUse
   // History Calendar
   const [showHistoryCalendar, setShowHistoryCalendar] = useState(false);
   // Staff management removed
+  
+  // License & Device Info
+  const [deviceId, setDeviceId] = useState<string>('Loading...');
+  const [licenseInfo, setLicenseInfo] = useState<LicenseState | null>(null);
+  
   const [receiptDesign, setReceiptDesign] = useState<ReceiptDesign>({
     showLogo: false,
     restaurantName: 'CaissaPro',
@@ -269,8 +275,21 @@ export default function AdminPanel({ visible, onClose, onDataChanged, currentUse
   useEffect(() => {
     if (visible) {
       loadDataForTab(activeTab);
+      // Load device ID and license info
+      loadDeviceInfo();
     }
   }, [activeTab, visible]);
+
+  const loadDeviceInfo = async () => {
+    try {
+      const id = await getDeviceFingerprint();
+      setDeviceId(id);
+      const license = await LicenseService.getCachedState();
+      setLicenseInfo(license);
+    } catch (error) {
+      console.error('Failed to load device info:', error);
+    }
+  };
 
   const loadDataForTab = async (tab: AdminTab) => {
     setLoading(true);
@@ -2674,7 +2693,7 @@ export default function AdminPanel({ visible, onClose, onDataChanged, currentUse
             <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>Mode</Text>
             <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.success }}>Hors ligne</Text>
           </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
             <Text style={{ fontSize: fontSize.sm, color: colors.textSecondary }}>Impression</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               {printerState.status === 'connected' ? <CheckCircle size={12} color={colors.success} /> : <AlertTriangle size={12} color={colors.textMuted} />}
@@ -2682,6 +2701,47 @@ export default function AdminPanel({ visible, onClose, onDataChanged, currentUse
                 {printerState.status === 'connected' ? 'Prête' : 'Non configurée'}
               </Text>
             </View>
+          </View>
+          
+          {/* Device ID */}
+          <View style={{ 
+            backgroundColor: '#F5F5F7', 
+            borderRadius: 8, 
+            padding: spacing.md, 
+            marginTop: spacing.sm,
+            marginBottom: spacing.lg,
+          }}>
+            <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginBottom: 4 }}>
+              Device ID (for support)
+            </Text>
+            <Text style={{ 
+              fontSize: fontSize.sm, 
+              fontWeight: '600', 
+              color: colors.text,
+              fontFamily: 'monospace',
+              letterSpacing: 1,
+            }}>
+              {deviceId}
+            </Text>
+            {licenseInfo && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: 6 }}>
+                {licenseInfo.status === 'licensed' ? (
+                  <>
+                    <CheckCircle size={14} color={colors.success} />
+                    <Text style={{ fontSize: fontSize.xs, color: colors.success, fontWeight: '600' }}>
+                      Licensed ({licenseInfo.licensePlan})
+                    </Text>
+                  </>
+                ) : licenseInfo.status === 'trial_active' ? (
+                  <>
+                    <Clock size={14} color="#F59E0B" />
+                    <Text style={{ fontSize: fontSize.xs, color: '#F59E0B', fontWeight: '600' }}>
+                      Trial: {licenseInfo.trialDaysRemaining} min remaining
+                    </Text>
+                  </>
+                ) : null}
+              </View>
+            )}
           </View>
 
           {/* Replay Tutorial Button */}
