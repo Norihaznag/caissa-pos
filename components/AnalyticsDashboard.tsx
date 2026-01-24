@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Percent,
   BarChart3,
+  Printer,
 } from 'lucide-react-native';
 import { BarChart, PieChart } from 'react-native-gifted-charts';
 import { colors, spacing, borderRadius, fontSize, shadows } from '../lib/theme';
@@ -41,11 +42,13 @@ import {
 interface AnalyticsDashboardProps {
   visible: boolean;
   onClose: () => void;
+  onPrintReport?: () => void;
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   visible,
   onClose,
+  onPrintReport,
 }) => {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
@@ -176,21 +179,42 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               </Text>
             </View>
           </View>
-          <TouchableOpacity 
-            onPress={onClose}
-            style={{ 
-              width: 32, 
-              height: 32, 
-              borderRadius: 8, 
-              backgroundColor: '#E8E8E8',
-              borderWidth: 1,
-              borderColor: '#C8C8C8',
-              alignItems: 'center', 
-              justifyContent: 'center',
-            }}
-          >
-            <X size={16} color="#666666" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {onPrintReport && (
+              <TouchableOpacity 
+                onPress={onPrintReport}
+                style={{ 
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: 12,
+                  height: 32, 
+                  borderRadius: 8, 
+                  backgroundColor: '#007AFF',
+                  borderWidth: 1,
+                  borderColor: '#0066DD',
+                }}
+              >
+                <Printer size={14} color="#FFFFFF" />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#FFFFFF' }}>Imprimer</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              onPress={onClose}
+              style={{ 
+                width: 32, 
+                height: 32, 
+                borderRadius: 8, 
+                backgroundColor: '#E8E8E8',
+                borderWidth: 1,
+                borderColor: '#C8C8C8',
+                alignItems: 'center', 
+                justifyContent: 'center',
+              }}
+            >
+              <X size={16} color="#666666" />
+            </TouchableOpacity>
+          </View>
         </View>
         
         {/* Date Navigator */}

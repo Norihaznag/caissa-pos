@@ -4805,6 +4805,7 @@ export default function CashierSimpleScreen() {
       <AnalyticsDashboard
         visible={showAnalyticsDashboard}
         onClose={() => setShowAnalyticsDashboard(false)}
+        onPrintReport={handlePrintDailyReport}
       />
 
       {/* Unified Printer Modal - Bluetooth/WiFi/USB */}
